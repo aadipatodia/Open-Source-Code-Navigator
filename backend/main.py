@@ -106,7 +106,7 @@ def generate_with_ollama(prompt: str) -> str:
         url = f"{OLLAMA_BASE_URL}/api/generate"
         payload = {"model": OLLAMA_MODEL, "prompt": prompt, "stream": False}
         logger.debug(f"Sending request to Ollama: {url} with model {OLLAMA_MODEL}")
-        response = requests.post(url, json=payload, timeout=120)
+        response = requests.post(url, json=payload, timeout=900)
         response.raise_for_status()
         return response.json().get("response", "").strip()
     except requests.exceptions.RequestException as e:
