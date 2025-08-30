@@ -209,7 +209,24 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
     }
   };
 
-  const handleAskQuestion = async (question: string) => { console.log('Question asked:', question); };
+  const handleAskQuestion = async (question: string) => {
+    setChatLoading(true);
+    // Add the user's message to the chat
+    setChatMessages(prevMessages => [...prevMessages, { text: question, sender: 'user' }]);
+
+    try {
+      const response = await axios.post('http://localhost:8000/api/chat', { message: question }, {
+        headers: { 'Authorization': `Bearer ${sessionToken || ''}` }
+      });
+      // Add the AI's response to the chat
+      setChatMessages(prevMessages => [...prevMessages, { text: response.data.response, sender: 'ai' }]);
+    } catch (error) {
+      console.error('Failed to get AI response', error);
+      setChatMessages(prevMessages => [...prevMessages, { text: "Sorry, I couldn't get a response. Please try again.", sender: 'ai' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
 
   return (

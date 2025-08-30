@@ -24,7 +24,7 @@ app = FastAPI(title="Open-Source On-Ramp API", version="3.0.0")
 # --- CORS Configuration ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173","http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -81,6 +81,9 @@ class ContributionStep(BaseModel):
 
 class GuidedContributionResponse(BaseModel):
     plan: List[ContributionStep]
+    
+class ChatRequest(BaseModel):
+    message: str
 
 # In-memory cache for cloned repository paths
 repo_cache = {}
@@ -274,6 +277,32 @@ async def get_contribution_guide(request: GuidedContributionRequest, g: Github =
 
     logger.debug(f"Contribution guide generated with {len(plan)} steps")
     return GuidedContributionResponse(plan=plan)
+
+@app.post("/api/chat")
+async def chat_with_ai(request: ChatRequest):
+    """
+    Handles a chat message, sending it to the AI for a response.
+    """
+    logger.debug(f"Received chat message: {request.message}")
+
+    # You can customize this prompt to provide more context to the AI
+    prompt = (
+        "You are a helpful and knowledgeable AI assistant. "
+        "Your goal is to answer questions concisely and accurately.\n\n"
+        f"User: {request.message}\n"
+        "AI:"
+    )
+
+    try:
+        ai_response = generate_with_ollama(prompt)
+        logger.debug("AI response generated successfully.")
+        return {"response": ai_response}
+    except HTTPException as e:
+        logger.error(f"Error during AI chat response: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error during AI chat response: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get a response from the AI.")
 
 @app.get("/api/repo/file_content")
 async def get_file_content(repo_url: str = Query(...), file_path: str = Query(...)):
