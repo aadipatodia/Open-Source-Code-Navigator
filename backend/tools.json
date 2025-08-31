@@ -1,0 +1,46 @@
+[
+  {
+    "name": "summarize_code",
+    "endpoint": "/api/summarize-code",
+    "description": "Summarizes code from a file or snippet.",
+    "parameters": {
+      "code": {"type": "string", "description": "Code snippet or file content"},
+      "context": {"type": "string", "description": "Optional context"}
+    }
+  },
+  {
+    "name": "generate_guide",
+    "endpoint": "/api/contribute/guide",
+    "description": "Generates a contribution plan for a GitHub issue.",
+    "parameters": {
+      "repoUrl": {"type": "string"},
+      "issueUrl": {"type": "string"},
+      "issueTitle": {"type": "string"}
+    }
+  },
+  {
+    "name": "chat_response",
+    "endpoint": "/api/chat",
+    "description": "Handles natural language queries about code.",
+    "parameters": {
+      "message": {"type": "string"}
+    }
+  },
+  {
+    "name": "search_issues",
+    "endpoint": "/api/issues/find",
+    "description": "Searches for good first issues based on skills.",
+    "parameters": {
+      "skills": {"type": "string"}
+    }
+  },
+  {
+    "name": "get_file_content",
+    "endpoint": "/api/repo/file_content",
+    "description": "Fetches content of a file from a repository.",
+    "parameters": {
+      "repo_url": {"type": "string"},
+      "file_path": {"type": "string"}
+    }
+  }
+]

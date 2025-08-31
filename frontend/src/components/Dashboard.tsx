@@ -295,7 +295,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
           <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
             <Box sx={{ flex: 1 }}>
-              <CodeInput onAnalyzeCode={handleAnalyzeCode} userToken={sessionToken || ''} />
+              <CodeInput userToken={sessionToken || ''} />
             </Box>
             <Box sx={{ flex: 1 }}>
                <Paper sx={{ p: 3, height: '100%' }}>

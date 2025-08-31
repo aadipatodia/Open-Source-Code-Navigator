@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Form, Request, Quer
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List
 import os
+import json
 from dotenv import load_dotenv
 import requests
 import logging
@@ -13,6 +14,8 @@ from github import Github, GithubException
 import git
 import re
 import uvicorn
+from descope import DescopeClient
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # --- Basic Configuration ---
 logging.basicConfig(level=logging.DEBUG)
@@ -34,6 +37,16 @@ app.add_middleware(
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "codellama")
 GITHUB_PAT = os.getenv("GITHUB_PAT")
+DESCOPE_PROJECT_ID = os.getenv("DESCOPE_PROJECT_ID")
+descope_client = DescopeClient(project_id=DESCOPE_PROJECT_ID, jwt_validation_leeway=15)
+security = HTTPBearer()
+
+async def verify_descope_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        descope_client.validate_session(session_token=credentials.credentials)
+        return credentials.credentials
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid or expired token: {e}")
 
 if not GITHUB_PAT:
     logger.error("FATAL: GITHUB_PAT not found in .env file. The application cannot function without it.")
@@ -45,6 +58,11 @@ class FileItem(BaseModel):
     path: str
     type: str
     children: Optional[List['FileItem']] = None
+    
+class CodeExplanationResponse(BaseModel):
+    is_correct: bool
+    explanation: str
+    corrected_code: Optional[str] = None
 
 class AnalyzeRepoRequest(BaseModel):
     repoUrl: str
@@ -96,22 +114,21 @@ def handle_remove_readonly(func, path, exc_info):
     os.chmod(path, stat.S_IWRITE)
     func(path)
 
-def get_github_client():
+def get_github_client(token: str = Depends(verify_descope_token)):
     if not GITHUB_PAT:
         raise HTTPException(status_code=503, detail="GitHub PAT not configured on the server.")
     return Github(GITHUB_PAT)
 
 def generate_with_ollama(prompt: str) -> str:
     try:
-        url = f"{OLLAMA_BASE_URL}/api/generate"
+        mcp_url = "http://localhost:8080/api/generate"  # MCP server URL
         payload = {"model": OLLAMA_MODEL, "prompt": prompt, "stream": False}
-        logger.debug(f"Sending request to Ollama: {url} with model {OLLAMA_MODEL}")
-        response = requests.post(url, json=payload, timeout=120)
+        response = requests.post(mcp_url, json=payload, timeout=900)
         response.raise_for_status()
         return response.json().get("response", "").strip()
     except requests.exceptions.RequestException as e:
-        logger.error(f"Ollama API error: {e}")
-        raise HTTPException(status_code=500, detail=f"Error connecting to Ollama AI service: {e}")
+        logger.error(f"MCP API error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error connecting to MCP server: {e}")
 
 def build_file_tree(root_dir: str, start_dir: str, max_depth=4, depth=0) -> List[FileItem]:
     """Recursively builds a file tree structure, calculating paths relative to start_dir."""
@@ -162,7 +179,7 @@ def format_file_tree_for_prompt(items: List[FileItem], indent: str = "") -> str:
 
 # --- API Endpoints ---
 @app.post("/api/analyze/repo", response_model=RepoAnalysisResponse)
-async def analyze_repo(request: AnalyzeRepoRequest):
+async def analyze_repo(request: AnalyzeRepoRequest, token: str = Depends(verify_descope_token)):
     repo_url = request.repoUrl
     logger.debug(f"Received analyze request for: {repo_url}")
     if not re.match(r"https://github\.com/[\w\-]+/[\w\-\.]+", repo_url):
@@ -201,6 +218,29 @@ async def analyze_repo(request: AnalyzeRepoRequest):
         logger.error(f"Failed during repo analysis {repo_url}: {e}")
         shutil.rmtree(temp_dir, onerror=handle_remove_readonly)
         raise HTTPException(status_code=500, detail=f"Failed to analyze repository: {e}")
+    
+@app.get("/tools")
+async def get_tools(token: str = Depends(verify_descope_token)):
+    with open("tools.json", "r") as f:
+        return json.load(f)
+
+@app.on_event("shutdown")
+async def cleanup():
+    for repo in repo_cache.values():
+        shutil.rmtree(repo["path"], onerror=handle_remove_readonly)
+    repo_cache.clear()
+    
+@app.post("/api/summarize-code")
+async def summarize_code(code: str = Form(...), context: str = Form(""), token: str = Depends(verify_descope_token)):
+    logger.debug("Summarizing code snippet")
+    prompt = (
+        "You are an expert code reviewer. Provide a concise summary of the following code. "
+        f"Context: '{context}'.\n\n"
+        f"Code:\n```\n{code}\n```"
+    )
+    summary = generate_with_ollama(prompt)
+    logger.debug("Code summary generated")
+    return {"summary": summary}
 
 @app.post("/api/contribute/guide", response_model=GuidedContributionResponse)
 async def get_contribution_guide(request: GuidedContributionRequest, g: Github = Depends(get_github_client)):
@@ -279,7 +319,7 @@ async def get_contribution_guide(request: GuidedContributionRequest, g: Github =
     return GuidedContributionResponse(plan=plan)
 
 @app.post("/api/chat")
-async def chat_with_ai(request: ChatRequest):
+async def chat_with_ai(request: ChatRequest, token: str = Depends(verify_descope_token)):
     """
     Handles a chat message, sending it to the AI for a response.
     """
@@ -305,7 +345,7 @@ async def chat_with_ai(request: ChatRequest):
         raise HTTPException(status_code=500, detail="Failed to get a response from the AI.")
 
 @app.get("/api/repo/file_content")
-async def get_file_content(repo_url: str = Query(...), file_path: str = Query(...)):
+async def get_file_content(repo_url: str = Query(...), file_path: str = Query(...), token: str = Depends(verify_descope_token)):
     logger.debug(f"Fetching file content for {repo_url}, path: {file_path}")
     if repo_url not in repo_cache:
         logger.error(f"Repository {repo_url} not found in cache")
@@ -361,19 +401,44 @@ async def get_user_stats(g: Github = Depends(get_github_client)):
         logger.error(f"Failed to fetch user stats from GitHub: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch user stats from GitHub.")
 
-@app.post("/api/explain/code")
-async def explain_code(code: str = Form(...), context: str = Form("")):
-    logger.debug("Explaining code snippet")
+@app.post("/api/explain/code", response_model=CodeExplanationResponse)
+async def explain_code(code: str = Form(...), context: str = Form(""), token: str = Depends(verify_descope_token)):
+    logger.debug("Analyzing and explaining code snippet")
+    
+    # A simpler prompt that doesn't require the AI to format JSON
     prompt = (
-        "You are an expert code reviewer and a friendly tutor for new developers. "
-        f"Here is some context about the code: '{context}'.\n\n"
-        f"Please provide a clear, step-by-step explanation of the following code snippet. "
-        "Explain its purpose, how it works, and point out any important patterns or potential improvements.\n\n"
+        "You are an expert code debugger. Analyze the following code snippet. \n"
+        "If the code has errors, explain them clearly and provide a corrected version under a 'Corrected Code:' heading.\n"
+        "If the code is correct, provide a clear, step-by-step explanation of what it does.\n\n"
+        f"Context: '{context}'\n"
         f"Code:\n```\n{code}\n```"
     )
-    explanation = generate_with_ollama(prompt)
-    logger.debug("Code explanation generated")
-    return {"explanation": explanation}
+
+    try:
+        # Get the raw text response from the AI
+        ai_response_str = generate_with_ollama(prompt)
+        
+        corrected_code = None
+        explanation = ai_response_str
+        is_correct = True # Assume correct unless we find evidence of an error
+
+        # Simple logic to check if the AI provided a corrected version
+        if "Corrected Code:" in ai_response_str:
+            is_correct = False
+            parts = ai_response_str.split("Corrected Code:", 1)
+            explanation = parts[0].strip()
+            corrected_code = parts[1].strip().replace("```python", "").replace("```", "").strip()
+
+        logger.debug("Code explanation generated")
+        return CodeExplanationResponse(
+            is_correct=is_correct,
+            explanation=explanation,
+            corrected_code=corrected_code
+        )
+        
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get explanation from AI.")
 
 @app.get("/")
 async def root():
