@@ -294,14 +294,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           )}
 
           <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
-            <Box sx={{ flex: 1 }}>
+            <Box sx={{ flex: { xs: 'none', lg: '8' }, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
               <CodeInput userToken={sessionToken || ''} />
-            </Box>
-            <Box sx={{ flex: 1 }}>
-               <Paper sx={{ p: 3, height: '100%' }}>
-                  <Typography variant="h6">Intelligent Q&A</Typography>
-                  <ChatComponent onSendMessage={handleAskQuestion} isLoading={chatLoading} messages={chatMessages} />
-                </Paper>
             </Box>
           </Box>
         </Box>
@@ -325,6 +319,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                 <Typography variant="h6" sx={{ color: 'white' }}>Recent Analyses</Typography>
              </Box>
              {/* Analysis history would be mapped here */}
+          </Paper>
+
+          {/* The ChatComponent is now here in the sidebar */}
+          <Paper sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column', background: 'linear-gradient(145deg, #1A1A2E 0%, #16213E 100%)' }}>
+            <Typography variant="h6" sx={{ color: 'white' }}>Intelligent Q&A</Typography>
+            <ChatComponent onSendMessage={handleAskQuestion} isLoading={chatLoading} messages={chatMessages} />
           </Paper>
         </Box>
       </Box>

@@ -10,9 +10,9 @@ interface ChatComponentProps {
   placeholder?: string;
 }
 
-const ChatComponent: React.FC<ChatComponentProps> = ({ 
-  onSendMessage, 
-  isLoading, 
+const ChatComponent: React.FC<ChatComponentProps> = ({
+  onSendMessage,
+  isLoading,
   messages,
   placeholder = "Ask a question..."
 }) => {
@@ -43,19 +43,23 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
         ) : (
           messages.map((msg, index) => (
             <Box key={index} sx={{ mb: 1, textAlign: msg.sender === 'user' ? 'right' : 'left' }}>
-              <Chip 
-                label={msg.text} 
-                sx={{ 
-                  bgcolor: msg.sender === 'user' ? '#551a8b' : '#333', 
+              <Chip
+                label={msg.text}
+                sx={{
+                  bgcolor: msg.sender === 'user' ? '#551a8b' : '#333',
                   color: 'white',
                   wordBreak: 'break-word',
                   height: 'auto',
+                  p: '10px 14px', // Add more padding to the chip
                   '& .MuiChip-label': {
-                      display: 'block',
-                      whiteSpace: 'normal',
+                    display: 'block',
+                    whiteSpace: 'normal',
+                    fontSize: '1rem',      // Increase font size for better readability
+                    lineHeight: 1.5,       // Adjust line height
                   },
-                }} 
+                }}
               />
+
             </Box>
           ))
         )}
@@ -77,8 +81,8 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
             },
           }}
         />
-        <IconButton 
-          onClick={handleSend} 
+        <IconButton
+          onClick={handleSend}
           disabled={isLoading || !input.trim()}
           sx={{ ml: 1, bgcolor: '#551a8b', '&:hover': { bgcolor: '#6a2cb3' } }}
         >

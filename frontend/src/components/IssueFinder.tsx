@@ -42,7 +42,7 @@ const IssueFinder: React.FC<IssueFinderProps> = ({ onFindIssues, onSelectIssue, 
   return (
     <Paper sx={{ p: 3, background: 'linear-gradient(145deg, #1A1A2E 0%, #16213E 100%)' }}>
       <Typography variant="h5" gutterBottom sx={{ color: 'white', mb: 2 }}>
-        
+
         Open-Source On-Ramp
       </Typography>
 
@@ -89,17 +89,26 @@ const IssueFinder: React.FC<IssueFinderProps> = ({ onFindIssues, onSelectIssue, 
       )}
 
       {issues.length > 0 && (
-        <List sx={{ mt: 2, border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '8px', p: 1 }}>
+        <List
+          sx={{
+            mt: 2,
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '8px',
+            p: 1,
+            maxHeight: '400px', // Set a fixed max-height
+            overflowY: 'auto'    // Make it scrollable
+          }}
+        >
           <Typography variant="h6" sx={{ color: 'white', ml: 2, mb: 1 }}>
             Found Issues
           </Typography>
           {issues.map((issue) => (
-            <ListItem 
-              key={issue.id} 
-              sx={{ 
-                bgcolor: 'rgba(255, 255, 255, 0.05)', 
-                borderRadius: '8px', 
-                mb: 1, 
+            <ListItem
+              key={issue.id}
+              sx={{
+                bgcolor: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '8px',
+                mb: 1,
                 '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.1)' },
                 cursor: 'pointer',
               }}
