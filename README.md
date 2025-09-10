@@ -252,3 +252,11 @@ Once all three servers are running, open your browser and go to:
 The **Code Navigator AI Assistant** is more than just a tool; it's a comprehensive platform that empowers developers to confidently navigate and contribute to the open-source community. By leveraging the power of AI and secure authentication, it removes the barriers to entry and fosters a more inclusive and collaborative environment for developers of all skill levels. This project not only meets the requirements of the hackathon but also provides a valuable and practical solution to a real-world problem faced by the developer community.
 
 
+**Demo Video Link** - 
+https://www.youtube.com/watch?v=5CUmaxyhFXU&feature=youtu.be
+
+##Team Members/ Collaborators 
+1. Aadi Patodia 
+2. Bhoomika Singh
+3 Ansh Chauhan 
+
