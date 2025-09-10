@@ -255,8 +255,9 @@ The **Code Navigator AI Assistant** is more than just a tool; it's a comprehensi
 **Demo Video Link** - 
 https://www.youtube.com/watch?v=5CUmaxyhFXU&feature=youtu.be
 
-##Team Members/ Collaborators 
+## Team Members/ Collaborators 
 1. Aadi Patodia 
 2. Bhoomika Singh
+
 3 Ansh Chauhan 
 
