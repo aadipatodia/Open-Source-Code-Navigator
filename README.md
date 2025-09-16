@@ -194,8 +194,8 @@ This server acts as a proxy to the Ollama model.
   cd path/to/Open-Source-Code-Navigator/backend
 
   # Activate virtual environment
-  # Windows: .\.venv\Scripts\Activate
-  # macOS/Linux: source .venv/bin/activate
+  Windows: .\.venv\Scripts\Activate
+  macOS/Linux: source .venv/bin/activate
   
   # Start the server
   python -m mcp_client_for_ollama --servers-json mcp_config.json --model stable-code
@@ -250,4 +250,16 @@ Once all three servers are running, open your browser and go to:
 ---
 
 The **Code Navigator AI Assistant** is more than just a tool; it's a comprehensive platform that empowers developers to confidently navigate and contribute to the open-source community. By leveraging the power of AI and secure authentication, it removes the barriers to entry and fosters a more inclusive and collaborative environment for developers of all skill levels. This project not only meets the requirements of the hackathon but also provides a valuable and practical solution to a real-world problem faced by the developer community.
+
+
+**Demo Video Link** - 
+https://www.youtube.com/watch?v=5CUmaxyhFXU&feature=youtu.be
+
+## Team Members/ Collaborators 
+1. Aadi Patodia https://github.com/aadipatodia
+2. Bhoomika Singh https://github.com/Bhoomikaaa001
+3. Ansh Chauhan https://github.com/Ansh0864
+
+
+
 
