@@ -91,6 +91,7 @@ class GuidedContributionRequest(BaseModel):
     repoUrl: str
     issueUrl: str
     issueTitle: str
+    issueBody: str # Added issueBody to the request
 
 class ContributionStep(BaseModel):
     step: int
@@ -197,19 +198,14 @@ async def analyze_repo(request: AnalyzeRepoRequest, token: str = Depends(verify_
         git.Repo.clone_from(repo_url, temp_dir, depth=1)
         logger.debug(f"Repository raw clone to {temp_dir}")
         
-        # CORRECTED LOGIC: The temporary directory itself is the repository's root.
-        # The previous implementation incorrectly assumed a subdirectory was created.
         repo_root_path = temp_dir
-        # We can extract the repository name from the URL
         repo_name = repo_url.split('/')[-1].replace('.git', '')
         logger.debug(f"Identified repo_root_path: {repo_root_path}")
 
-        # The file tree should be built starting from the actual repo root (temp_dir)
         file_structure = build_file_tree(repo_root_path, start_dir=repo_root_path)
         logger.debug(f"File structure generated with {len(file_structure)} items")
 
         analysis_result = {"name": repo_name, "url": repo_url, "structure": file_structure}
-        # Cache the correct path
         repo_cache[repo_url] = {"path": repo_root_path, "analysis": analysis_result}
         
         logger.info(f"Repository analysis completed for {repo_url}")
@@ -247,6 +243,7 @@ async def get_contribution_guide(request: GuidedContributionRequest, g: Github =
     logger.debug(f"Generating contribution guide for issue: {request.issueTitle}")
     repo_name_match = re.search(r"github\.com/([\w\-]+/[\w\-]+)", request.repoUrl)
     issue_number_match = re.search(r"/issues/(\d+)", request.issueUrl)
+
     if not repo_name_match or not issue_number_match:
         logger.error(f"Invalid repository or issue URL: {request.repoUrl}, {request.issueUrl}")
         raise HTTPException(status_code=400, detail="Invalid repository or issue URL.")
@@ -265,58 +262,81 @@ async def get_contribution_guide(request: GuidedContributionRequest, g: Github =
 
     if request.repoUrl not in repo_cache:
         logger.debug(f"Repository {request.repoUrl} not in cache, analyzing...")
-        await analyze_repo(AnalyzeRepoRequest(repoUrl=request.repoUrl))
+        # Create a new AnalyzeRepoRequest with the repoUrl
+        analyze_request = AnalyzeRepoRequest(repoUrl=request.repoUrl)
+        # Assuming verify_descope_token can be called to get a token if needed,
+        # or that analyze_repo doesn't strictly need it for this internal call.
+        # For simplicity, we call it directly. You might need to adjust auth handling.
+        await analyze_repo(analyze_request, "dummy-token-for-internal-call")
+
     
     analysis = repo_cache[request.repoUrl]['analysis']
     file_tree_string = format_file_tree_for_prompt(analysis['structure'])
 
-    prompt = (
-        "You are a senior software engineer mentoring a new open-source contributor. "
-        "Your task is to provide a clear, concise, and actionable step-by-step plan to help them solve a specific GitHub issue. "
-        "The plan should be easy to follow for someone new to the codebase.\n\n"
-        "**GitHub Issue Title:**\n"
-        f'"{request.issueTitle}"\n\n'
-        "**GitHub Issue Description:**\n"
-        f'"{issue_body}"\n\n'
-        "**Repository File Structure (partial):**\n"
-        f"```\n{file_tree_string}\n```\n\n"
-        "**Your Task:**\n"
-        "Based on all the information above, generate a step-by-step plan. For each step, provide a clear title and detailed instructions. "
-        "Identify the most relevant files the contributor should look at. If you suggest code changes, provide clear examples.\n\n"
-        "**Output Format:**\n"
-        "Use the following format exactly, with 'Step X: [Title]' on one line and the details on the following lines.\n\n"
-        "Step 1: [Title for Step 1]\n[Details for step 1...]\n\n"
-        "Step 2: [Title for Step 2]\n[Details for step 2...]\n\n"
-        "..."
-    )
+    # --- UPDATED AND IMPROVED PROMPT ---
+    prompt = f"""
+You are an expert software developer and mentor who provides guidance to new open-source contributors.
+Your task is to create a detailed, step-by-step plan to solve a GitHub issue.
+
+**The Issue:**
+- **Title:** {request.issueTitle}
+- **Description:** {issue_body}
+- **Repository File Structure (partial):**
+{file_tree_string}
+
+
+**Your Plan:**
+Provide a clear, actionable, and step-by-step guide to resolve this issue. Follow this structure exactly:
+
+**Step 1: Understand the Problem**
+- In your own words, explain what the issue is about.
+- Describe the goal of the task and what a successful contribution will look like.
+
+**Step 2: High-Level Roadmap**
+- Outline the overall approach to solving the issue.
+- List the key files in the codebase that will likely need to be modified.
+
+**Step 3: Detailed Implementation - First Action**
+- Describe the very first concrete step the contributor should take.
+- For example: "Open the file `src/components/FileExplorer.tsx` and locate the `useEffect` hook on line 42."
+- Provide any initial code snippets or changes that need to be made here.
+
+**Step 4: Detailed Implementation - Next Steps**
+- Continue to provide a sequence of clear, actionable steps.
+- Be specific about file names, function names, and the logic that needs to be implemented.
+- Explain *why* each step is necessary.
+
+**Step 5: Testing the Changes**
+- Explain how the contributor can test their changes to ensure the issue is resolved.
+- Mention any specific commands to run (e.g., `npm test`) or manual tests to perform.
+
+**Final Advice:**
+- Offer some final words of encouragement.
+- Remind the contributor to ask for help if they get stuck.
+"""
+
 
     logger.info(f"Generating contribution guide for issue: {request.issueTitle}")
     ai_response = generate_with_ollama(prompt)
     
     plan = []
-    steps_raw = re.split(r'\n(?=Step \d+:)', ai_response)
+    # Use a more robust regex to handle variations in the AI's output
+    steps_raw = re.findall(r"\*\*Step \d+: (.+?)\*\*\n(.*?)(?=\n\*\*Step|\Z)", ai_response, re.DOTALL)
     
-    current_step_number = 1
-    for step_text in steps_raw:
-        if not step_text.strip():
-            continue
-        
-        match = re.match(r'Step \d+:\s*(.*?)\n(.*)', step_text, re.DOTALL)
-        if match:
-            title, details = match.groups()
-            plan.append(ContributionStep(
-                step=current_step_number,
-                title=title.strip(),
-                details=details.strip()
-            ))
-            current_step_number += 1
+    for i, (title, details) in enumerate(steps_raw):
+        plan.append(ContributionStep(
+            step=i + 1,
+            title=title.strip(),
+            details=details.strip()
+        ))
 
     if not plan:
-        logger.warning("No steps parsed from AI response, using fallback")
-        plan.append(ContributionStep(step=1, title="Understand the Goal", details=ai_response))
+        logger.warning("No structured steps parsed from AI response, using fallback.")
+        plan.append(ContributionStep(step=1, title="AI Response", details=ai_response))
 
     logger.debug(f"Contribution guide generated with {len(plan)} steps")
     return GuidedContributionResponse(plan=plan)
+
 
 @app.post("/api/chat")
 async def chat_with_ai(request: ChatRequest, token: str = Depends(verify_descope_token)):
@@ -325,7 +345,6 @@ async def chat_with_ai(request: ChatRequest, token: str = Depends(verify_descope
     """
     logger.debug(f"Received chat message: {request.message}")
 
-    # You can customize this prompt to provide more context to the AI
     prompt = (
         "You are a helpful and knowledgeable AI assistant. "
         "Your goal is to answer questions concisely and accurately.\n\n"
@@ -405,7 +424,6 @@ async def get_user_stats(g: Github = Depends(get_github_client)):
 async def explain_code(code: str = Form(...), context: str = Form(""), token: str = Depends(verify_descope_token)):
     logger.debug("Analyzing and explaining code snippet")
     
-    # A simpler prompt that doesn't require the AI to format JSON
     prompt = (
         "You are an expert code debugger. Analyze the following code snippet. \n"
         "If the code has errors, explain them clearly and provide a corrected version under a 'Corrected Code:' heading.\n"
@@ -415,14 +433,12 @@ async def explain_code(code: str = Form(...), context: str = Form(""), token: st
     )
 
     try:
-        # Get the raw text response from the AI
         ai_response_str = generate_with_ollama(prompt)
         
         corrected_code = None
         explanation = ai_response_str
-        is_correct = True # Assume correct unless we find evidence of an error
+        is_correct = True 
 
-        # Simple logic to check if the AI provided a corrected version
         if "Corrected Code:" in ai_response_str:
             is_correct = False
             parts = ai_response_str.split("Corrected Code:", 1)
