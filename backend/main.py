@@ -424,13 +424,16 @@ async def get_user_stats(g: Github = Depends(get_github_client)):
 async def explain_code(code: str = Form(...), context: str = Form(""), token: str = Depends(verify_descope_token)):
     logger.debug("Analyzing and explaining code snippet")
     
+    
     prompt = (
-        "You are an expert code debugger. Analyze the following code snippet. \n"
-        "If the code has errors, explain them clearly and provide a corrected version under a 'Corrected Code:' heading.\n"
+        "You are an expert cybersecurity analyst and code reviewer. Analyze the following code for potential security vulnerabilities, "
+        "such as SQL injection, cross-site scripting (XSS), buffer overflows, or insecure dependencies. "
+        "If you find a vulnerability, explain it clearly, rate its severity, and provide a corrected, secure version under a 'Corrected Code:' heading."
         "If the code is correct, provide a clear, step-by-step explanation of what it does.\n\n"
         f"Context: '{context}'\n"
         f"Code:\n```\n{code}\n```"
     )
+    
 
     try:
         ai_response_str = generate_with_ollama(prompt)
