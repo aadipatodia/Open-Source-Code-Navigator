@@ -1,22 +1,22 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
+  Box,
   Collapse,
-  IconButton,
+  TextField,
+  InputAdornment,
   Typography,
 } from '@mui/material';
 import {
-  Folder as FolderIcon,
-  FolderOpen as FolderOpenIcon,
-  InsertDriveFile as FileIcon,
-  ExpandMore,
-  ChevronRight,
+  FolderRounded,
+  FolderOpenRounded,
+  DescriptionRounded,
+  ExpandMoreRounded,
+  ChevronRightRounded,
+  SearchRounded,
 } from '@mui/icons-material';
+import { alpha } from '@mui/material/styles';
+import { brand } from '../theme/theme';
 
-// Define the FileItem interface
 export interface FileItem {
   name: string;
   path: string;
@@ -32,19 +32,59 @@ interface FileExplorerProps {
   selectedFile: FileItem | null;
 }
 
-const FileItemComponent: React.FC<{ item: FileItem; level: number; onFileSelect: (file: FileItem) => void; selectedFile: FileItem | null; }> = ({
+// ---------------------------------------------------------------------------
+// Helpers — filter the tree to items matching a query (keeping ancestors).
+// ---------------------------------------------------------------------------
+function filterTree(items: FileItem[], query: string): FileItem[] {
+  if (!query) return items;
+  const q = query.toLowerCase();
+  const walk = (nodes: FileItem[]): FileItem[] => {
+    const out: FileItem[] = [];
+    for (const node of nodes) {
+      if (node.type === 'directory') {
+        const filteredChildren = walk(node.children || []);
+        if (filteredChildren.length || node.name.toLowerCase().includes(q)) {
+          out.push({ ...node, children: filteredChildren });
+        }
+      } else if (node.name.toLowerCase().includes(q)) {
+        out.push(node);
+      }
+    }
+    return out;
+  };
+  return walk(items);
+}
+
+// ---------------------------------------------------------------------------
+// Tree node component
+// ---------------------------------------------------------------------------
+interface NodeProps {
+  item: FileItem;
+  level: number;
+  onFileSelect: (file: FileItem) => void;
+  selectedFile: FileItem | null;
+  defaultOpen?: boolean;
+  query: string;
+}
+
+const FileNode: React.FC<NodeProps> = ({
   item,
-  level = 0,
+  level,
   onFileSelect,
   selectedFile,
+  defaultOpen,
+  query,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
   const isDirectory = item.type === 'directory';
-  const isSelected = selectedFile && selectedFile.path === item.path;
+  // Auto-expand on search or when defaultOpen is true (top-level).
+  const [isOpen, setIsOpen] = useState(Boolean(defaultOpen || query));
+  const isSelected = !!selectedFile && selectedFile.path === item.path;
+
+  const effectiveOpen = isOpen || Boolean(query);
 
   const handleClick = () => {
     if (isDirectory) {
-      setIsOpen(!isOpen);
+      setIsOpen((prev) => !prev);
     } else {
       onFileSelect(item);
     }
@@ -52,71 +92,128 @@ const FileItemComponent: React.FC<{ item: FileItem; level: number; onFileSelect:
 
   return (
     <>
-      <ListItem
+      <Box
         onClick={handleClick}
         sx={{
-          pl: level * 2 + 2,
-          backgroundColor: isSelected ? 'rgba(168, 255, 0, 0.1)' : 'transparent',
-          borderRadius: '4px',
-          '&:hover': { backgroundColor: 'rgba(168, 255, 0, 0.05)' },
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          py: 0.4,
+          pr: 1,
+          pl: `${level * 14 + 6}px`,
+          borderRadius: 1.5,
           cursor: 'pointer',
-          transition: 'background-color 0.2s',
+          color: isSelected ? brand.text : brand.textMuted,
+          background: isSelected ? alpha(brand.primary, 0.18) : 'transparent',
+          border: isSelected
+            ? `1px solid ${alpha(brand.primary, 0.5)}`
+            : '1px solid transparent',
+          transition: 'background 120ms ease, color 120ms ease',
+          '&:hover': {
+            background: isSelected
+              ? alpha(brand.primary, 0.22)
+              : alpha(brand.text, 0.05),
+            color: brand.text,
+          },
         }}
       >
-        <ListItemIcon sx={{ minWidth: '32px' }}>
+        <Box sx={{ width: 18, display: 'grid', placeItems: 'center', color: brand.textSubtle }}>
           {isDirectory ? (
-            <IconButton onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }} size="small">
-              {isOpen ? <ExpandMore /> : <ChevronRight />}
-            </IconButton>
+            effectiveOpen ? <ExpandMoreRounded fontSize="small" /> : <ChevronRightRounded fontSize="small" />
           ) : null}
-        </ListItemIcon>
-        <ListItemIcon sx={{ minWidth: '32px', color: isSelected ? '#a8ff00' : 'inherit' }}>
-          {isDirectory ? (isOpen ? <FolderOpenIcon /> : <FolderIcon />) : <FileIcon />}
-        </ListItemIcon>
-        <ListItemText
-          primary={item.name}
+        </Box>
+        <Box sx={{ width: 18, display: 'grid', placeItems: 'center', color: isSelected ? brand.primary : brand.textSubtle }}>
+          {isDirectory ? (
+            effectiveOpen ? <FolderOpenRounded sx={{ fontSize: 18 }} /> : <FolderRounded sx={{ fontSize: 18 }} />
+          ) : (
+            <DescriptionRounded sx={{ fontSize: 18 }} />
+          )}
+        </Box>
+        <Typography
           sx={{
-            '& .MuiListItemText-primary': {
-              fontSize: '0.9rem',
-              color: isSelected ? '#a8ff00' : '#e0e0e0',
-            },
+            fontSize: '0.86rem',
+            color: 'inherit',
+            fontWeight: isSelected ? 600 : 500,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            fontFamily: isDirectory ? 'inherit' : '"JetBrains Mono", monospace',
           }}
-        />
-      </ListItem>
-      {isDirectory && isOpen && item.children && (
-        <Collapse in={isOpen} timeout="auto" unmountOnExit>
-          <List component="div" disablePadding>
-            {item.children.map((child) => (
-              <FileItemComponent
-                key={child.path}
-                item={child}
-                level={level + 1}
-                onFileSelect={onFileSelect}
-                selectedFile={selectedFile}
-              />
-            ))}
-          </List>
+        >
+          {item.name}
+        </Typography>
+      </Box>
+
+      {isDirectory && item.children && (
+        <Collapse in={effectiveOpen} timeout="auto" unmountOnExit>
+          {item.children.map((child) => (
+            <FileNode
+              key={child.path}
+              item={child}
+              level={level + 1}
+              onFileSelect={onFileSelect}
+              selectedFile={selectedFile}
+              query={query}
+            />
+          ))}
         </Collapse>
       )}
     </>
   );
 };
 
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 const FileExplorer: React.FC<FileExplorerProps> = ({ structure, onFileSelect, selectedFile }) => {
-  if (!structure) return <Typography sx={{ color: '#a8ff00' }}>No repository structure available</Typography>;
+  const [query, setQuery] = useState('');
+  const filtered = useMemo(() => filterTree(structure, query.trim()), [structure, query]);
+
+  if (!structure || structure.length === 0) {
+    return (
+      <Typography variant="body2" sx={{ color: brand.textMuted, p: 2 }}>
+        No files to display.
+      </Typography>
+    );
+  }
 
   return (
-    <List component="nav" disablePadding sx={{ bgcolor: '#1e1e2f', borderRadius: '4px', p: 1 }}>
-      {structure.map((item) => (
-        <FileItemComponent
-          key={item.path}
-          item={item}
-          level={0}
-          onFileSelect={onFileSelect}
-          selectedFile={selectedFile}
-        />
-      ))}
-    </List>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <TextField
+        size="small"
+        fullWidth
+        placeholder="Filter files…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        sx={{ mb: 1.5 }}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchRounded sx={{ color: brand.textSubtle, fontSize: 18 }} />
+            </InputAdornment>
+          ),
+        }}
+      />
+      <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5 }}>
+        {filtered.length === 0 ? (
+          <Typography variant="body2" sx={{ color: brand.textMuted, p: 2 }}>
+            No matches for "{query}".
+          </Typography>
+        ) : (
+          filtered.map((item) => (
+            <FileNode
+              key={item.path}
+              item={item}
+              level={0}
+              onFileSelect={onFileSelect}
+              selectedFile={selectedFile}
+              defaultOpen
+              query={query.trim()}
+            />
+          ))
+        )}
+      </Box>
+    </Box>
   );
 };
 

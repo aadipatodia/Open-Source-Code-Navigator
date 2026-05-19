@@ -1,110 +1,341 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme, alpha } from '@mui/material/styles';
 
-// Ruru NFT color scheme from https://ruru-nft.netlify.app/
-const ruruColors = {
-  // Primary purples (main brand colors)
-  primaryPurple: '#8A2BE2',    // Deep purple
-  purpleLight: '#9B59B6',      // Lighter purple
-  purpleDark: '#6A0DAD',       // Darker purple
-  
-  // Teal/cyan accents
-  teal: '#00CED1',             // Bright teal
-  tealLight: '#20B2AA',        // Light teal
-  tealDark: '#008B8B',         // Dark teal
-  
-  // Background colors
-  darkBg: '#0A0A1A',           // Very dark blue-black
-  cardBg: '#1A1A2E',           // Dark card background
-  paperBg: '#16213E',          // Slightly lighter dark
-  
-  // Text colors
-  textPrimary: '#FFFFFF',      // White text
-  textSecondary: '#B8B8B8',    // Light gray text
-  textTertiary: '#888888',     // Medium gray text
-  
-  // Status colors
-  success: '#00FF00',          // Green
-  warning: '#FFD700',          // Gold
-  error: '#FF6B6B',            // Coral red
+// ---------------------------------------------------------------------------
+// Brand palette — a calm dark navy with violet/cyan accents (Linear / Vercel-
+// inspired) instead of the previous neon-purple-everywhere look.
+// ---------------------------------------------------------------------------
+export const brand = {
+  bg: '#07091a',
+  surface: '#0f1330',
+  surfaceElevated: '#141a3d',
+  surfaceMuted: '#0c1029',
+  border: 'rgba(148, 163, 184, 0.14)',
+  borderStrong: 'rgba(148, 163, 184, 0.28)',
+
+  primary: '#7c5cff',       // violet
+  primaryHover: '#6b48ff',
+  secondary: '#22d3ee',     // cyan
+  accent: '#f472b6',        // pink (used sparingly)
+
+  success: '#10b981',
+  warning: '#f59e0b',
+  error: '#f43f5e',
+
+  text: '#f8fafc',
+  textMuted: '#a5acca',
+  textSubtle: '#6f7798',
 };
 
-export const ruruTheme = createTheme({
+export const brandGradient = `linear-gradient(135deg, ${brand.primary} 0%, ${brand.secondary} 100%)`;
+export const brandGradientSoft = `linear-gradient(135deg, ${alpha(brand.primary, 0.18)} 0%, ${alpha(brand.secondary, 0.14)} 100%)`;
+
+export const appTheme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: ruruColors.primaryPurple,
-      light: ruruColors.purpleLight,
-      dark: ruruColors.purpleDark,
+      main: brand.primary,
+      dark: brand.primaryHover,
+      contrastText: '#ffffff',
     },
     secondary: {
-      main: ruruColors.teal,
-      light: ruruColors.tealLight,
-      dark: ruruColors.tealDark,
+      main: brand.secondary,
+      contrastText: '#04121a',
     },
+    error: { main: brand.error },
+    warning: { main: brand.warning },
+    success: { main: brand.success },
     background: {
-      default: ruruColors.darkBg,
-      paper: ruruColors.cardBg,
+      default: brand.bg,
+      paper: brand.surface,
     },
     text: {
-      primary: ruruColors.textPrimary,
-      secondary: ruruColors.textSecondary,
+      primary: brand.text,
+      secondary: brand.textMuted,
     },
+    divider: brand.border,
+  },
+  shape: {
+    borderRadius: 14,
   },
   typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-    h1: {
-      fontWeight: 700,
-      background: `linear-gradient(45deg, ${ruruColors.primaryPurple}, ${ruruColors.teal})`,
-      backgroundClip: 'text',
-      WebkitBackgroundClip: 'text',
-      WebkitTextFillColor: 'transparent',
-    },
-    h2: {
-      fontWeight: 600,
-      color: ruruColors.textPrimary,
-    },
-    h3: {
-      fontWeight: 500,
-      color: ruruColors.textPrimary,
-    },
-    body1: {
-      color: ruruColors.textSecondary,
-    },
+    fontFamily: '"Inter", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    h1: { fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif', fontWeight: 800, letterSpacing: '-0.02em' },
+    h2: { fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif', fontWeight: 800, letterSpacing: '-0.02em' },
+    h3: { fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif', fontWeight: 700, letterSpacing: '-0.01em' },
+    h4: { fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif', fontWeight: 700, letterSpacing: '-0.01em' },
+    h5: { fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif', fontWeight: 700, letterSpacing: '-0.005em' },
+    h6: { fontFamily: '"Plus Jakarta Sans", "Inter", sans-serif', fontWeight: 700 },
+    subtitle1: { fontWeight: 500 },
+    subtitle2: { fontWeight: 500 },
+    button: { fontWeight: 600, textTransform: 'none', letterSpacing: '0.005em' },
+    body1: { lineHeight: 1.6 },
+    body2: { lineHeight: 1.6 },
   },
   components: {
-    MuiButton: {
+    MuiCssBaseline: {
       styleOverrides: {
-        root: {
-          borderRadius: '12px',
-          textTransform: 'none',
-          fontWeight: 600,
-        },
-        containedPrimary: {
-          background: `linear-gradient(45deg, ${ruruColors.primaryPurple}, ${ruruColors.teal})`,
-          '&:hover': {
-            background: `linear-gradient(45deg, ${ruruColors.purpleDark}, ${ruruColors.tealDark})`,
-          },
+        body: {
+          backgroundColor: brand.bg,
         },
       },
     },
     MuiPaper: {
+      defaultProps: { elevation: 0 },
       styleOverrides: {
         root: {
-          backgroundColor: ruruColors.cardBg,
+          backgroundColor: brand.surface,
           backgroundImage: 'none',
-          borderRadius: '16px',
-          border: `1px solid rgba(255, 255, 255, 0.1)`,
+          borderRadius: 18,
+          border: `1px solid ${brand.border}`,
+          backdropFilter: 'blur(8px)',
+        },
+        outlined: {
+          borderColor: brand.border,
         },
       },
     },
     MuiAppBar: {
+      defaultProps: { elevation: 0 },
       styleOverrides: {
         root: {
-          backgroundColor: ruruColors.darkBg,
+          backgroundColor: alpha(brand.bg, 0.7),
           backgroundImage: 'none',
-          borderBottom: `1px solid rgba(255, 255, 255, 0.1)`,
+          borderBottom: `1px solid ${brand.border}`,
+          backdropFilter: 'blur(14px)',
+        },
+      },
+    },
+    MuiButton: {
+      defaultProps: { disableElevation: true },
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          paddingInline: 18,
+          fontWeight: 600,
+          transition: 'transform 120ms ease, box-shadow 200ms ease, background 200ms ease, border-color 200ms ease',
+          '&:hover': {
+            transform: 'translateY(-1px)',
+          },
+        },
+        containedPrimary: {
+          background: brandGradient,
+          color: '#fff',
+          boxShadow: `0 8px 30px ${alpha(brand.primary, 0.35)}`,
+          '&:hover': {
+            background: `linear-gradient(135deg, ${brand.primaryHover} 0%, ${brand.secondary} 100%)`,
+            boxShadow: `0 10px 36px ${alpha(brand.primary, 0.45)}`,
+          },
+        },
+        outlinedPrimary: {
+          borderColor: alpha(brand.primary, 0.5),
+          color: brand.text,
+          '&:hover': {
+            borderColor: brand.primary,
+            backgroundColor: alpha(brand.primary, 0.08),
+          },
+        },
+        outlined: {
+          borderColor: brand.borderStrong,
+          color: brand.text,
+          '&:hover': {
+            borderColor: brand.text,
+            backgroundColor: alpha(brand.text, 0.04),
+          },
+        },
+        text: {
+          color: brand.textMuted,
+          '&:hover': {
+            backgroundColor: alpha(brand.text, 0.04),
+            color: brand.text,
+          },
+        },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          color: brand.textMuted,
+          borderRadius: 10,
+          transition: 'background 150ms ease, color 150ms ease',
+          '&:hover': {
+            color: brand.text,
+            backgroundColor: alpha(brand.text, 0.06),
+          },
+        },
+      },
+    },
+    MuiTextField: {
+      defaultProps: { variant: 'outlined', size: 'medium' },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          backgroundColor: alpha(brand.surfaceMuted, 0.6),
+          color: brand.text,
+          transition: 'background 150ms ease, border-color 150ms ease',
+          '& fieldset': {
+            borderColor: brand.border,
+            transition: 'border-color 150ms ease',
+          },
+          '&:hover fieldset': {
+            borderColor: brand.borderStrong,
+          },
+          '&.Mui-focused fieldset': {
+            borderColor: brand.primary,
+            borderWidth: '1.5px',
+          },
+          '&.Mui-disabled': {
+            opacity: 0.6,
+          },
+        },
+        input: {
+          '&::placeholder': {
+            color: brand.textSubtle,
+            opacity: 1,
+          },
+        },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          color: brand.textMuted,
+          '&.Mui-focused': {
+            color: brand.primary,
+          },
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 999,
+          fontWeight: 500,
+        },
+        filled: {
+          backgroundColor: alpha(brand.primary, 0.16),
+          color: brand.text,
+          border: `1px solid ${alpha(brand.primary, 0.35)}`,
+        },
+        outlined: {
+          borderColor: brand.border,
+          color: brand.text,
+        },
+      },
+    },
+    MuiTooltip: {
+      styleOverrides: {
+        tooltip: {
+          backgroundColor: '#1a1f44',
+          color: brand.text,
+          border: `1px solid ${brand.border}`,
+          fontSize: 12,
+          padding: '6px 10px',
+          borderRadius: 8,
+        },
+        arrow: {
+          color: '#1a1f44',
+        },
+      },
+    },
+    MuiAccordion: {
+      defaultProps: { disableGutters: true, elevation: 0 },
+      styleOverrides: {
+        root: {
+          backgroundColor: alpha(brand.surfaceElevated, 0.7),
+          border: `1px solid ${brand.border}`,
+          borderRadius: 14,
+          overflow: 'hidden',
+          '&:before': { display: 'none' },
+          '&.Mui-expanded': { margin: 0 },
+          marginBottom: 10,
+        },
+      },
+    },
+    MuiAccordionSummary: {
+      styleOverrides: {
+        root: {
+          minHeight: 56,
+          paddingInline: 18,
+        },
+        content: {
+          margin: '14px 0',
+        },
+      },
+    },
+    MuiAccordionDetails: {
+      styleOverrides: {
+        root: {
+          padding: '6px 18px 18px',
+          borderTop: `1px solid ${brand.border}`,
+          backgroundColor: alpha(brand.surfaceMuted, 0.45),
+        },
+      },
+    },
+    MuiAlert: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          border: `1px solid ${brand.border}`,
+        },
+        standardError: {
+          backgroundColor: alpha(brand.error, 0.1),
+          color: '#fecdd3',
+          borderColor: alpha(brand.error, 0.3),
+        },
+        standardSuccess: {
+          backgroundColor: alpha(brand.success, 0.1),
+          color: '#a7f3d0',
+          borderColor: alpha(brand.success, 0.3),
+        },
+        standardWarning: {
+          backgroundColor: alpha(brand.warning, 0.1),
+          color: '#fde68a',
+          borderColor: alpha(brand.warning, 0.3),
+        },
+        standardInfo: {
+          backgroundColor: alpha(brand.secondary, 0.1),
+          color: '#a5f3fc',
+          borderColor: alpha(brand.secondary, 0.3),
+        },
+      },
+    },
+    MuiDivider: {
+      styleOverrides: {
+        root: { borderColor: brand.border },
+      },
+    },
+    MuiListItemButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 10,
+          paddingInline: 10,
+          '&.Mui-selected': {
+            backgroundColor: alpha(brand.primary, 0.16),
+            color: brand.text,
+            '& .MuiListItemIcon-root': { color: brand.primary },
+          },
+          '&.Mui-selected:hover': {
+            backgroundColor: alpha(brand.primary, 0.22),
+          },
+        },
+      },
+    },
+    MuiLinearProgress: {
+      styleOverrides: {
+        root: {
+          borderRadius: 999,
+          backgroundColor: alpha(brand.text, 0.08),
+        },
+        bar: {
+          background: brandGradient,
+          borderRadius: 999,
         },
       },
     },
   },
 });
+
+// Backwards-compat export so existing imports of `ruruTheme` keep working.
+export const ruruTheme = appTheme;

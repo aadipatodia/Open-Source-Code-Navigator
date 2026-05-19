@@ -1,8 +1,25 @@
-import React from 'react';
-import { Box, Typography, IconButton, Tooltip, Paper } from '@mui/material';
-import { CopyAll as CopyIcon } from '@mui/icons-material';
+import React, { useState } from 'react';
+import {
+  Box,
+  Typography,
+  IconButton,
+  Tooltip,
+  Paper,
+  Chip,
+  Snackbar,
+  Alert,
+} from '@mui/material';
+import {
+  ContentCopyRounded,
+  CheckRounded,
+  DescriptionRounded,
+} from '@mui/icons-material';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { alpha } from '@mui/material/styles';
 
-// The User type is now defined here to accept the prop from the Dashboard
+import { brand } from '../theme/theme';
+
 interface User {
   userId: string;
   name?: string;
@@ -11,73 +28,207 @@ interface User {
 
 interface CodebaseAnalysisProps {
   content: string;
-  language: string; // Reverted to 'language' to match the prop being passed from Dashboard
+  /** File extension or language hint (e.g. "ts", "py"). */
+  language: string;
+  fileName?: string;
+  filePath?: string;
   user: User;
 }
 
-const CodebaseAnalysis: React.FC<CodebaseAnalysisProps> = ({ content, language, user }) => {
-  const handleCopy = () => {
-    navigator.clipboard.writeText(content);
-    // Consider using a snackbar for a less intrusive notification
+const LANGUAGE_MAP: Record<string, string> = {
+  ts: 'typescript',
+  tsx: 'tsx',
+  js: 'javascript',
+  jsx: 'jsx',
+  py: 'python',
+  rb: 'ruby',
+  rs: 'rust',
+  go: 'go',
+  java: 'java',
+  kt: 'kotlin',
+  c: 'c',
+  h: 'c',
+  cpp: 'cpp',
+  hpp: 'cpp',
+  cs: 'csharp',
+  php: 'php',
+  swift: 'swift',
+  sh: 'bash',
+  bash: 'bash',
+  zsh: 'bash',
+  yml: 'yaml',
+  yaml: 'yaml',
+  json: 'json',
+  md: 'markdown',
+  html: 'html',
+  css: 'css',
+  scss: 'scss',
+  sql: 'sql',
+  toml: 'toml',
+  xml: 'xml',
+};
+
+const resolveLanguage = (raw: string) => {
+  if (!raw) return 'text';
+  const lower = raw.toLowerCase();
+  return LANGUAGE_MAP[lower] || lower;
+};
+
+const CodebaseAnalysis: React.FC<CodebaseAnalysisProps> = ({
+  content,
+  language,
+  fileName,
+  filePath,
+}) => {
+  const [copied, setCopied] = useState(false);
+  const resolvedLanguage = resolveLanguage(language);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+    } catch {
+      // ignore
+    }
   };
+
+  const lineCount = content ? content.split('\n').length : 0;
 
   return (
     <Paper
-      elevation={0}
       sx={{
         height: '100%',
         width: '100%',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: '#1A1A2E', // Unified dark background
-        border: '1px solid #16213E', // Border color from theme
-        borderRadius: '4px',
-        color: '#e0e0e0', // Light text color
+        borderRadius: 3,
+        overflow: 'hidden',
       }}
     >
+      {/* Header */}
       <Box
         sx={{
           display: 'flex',
-          justifyContent: 'space-between',
           alignItems: 'center',
-          p: 1,
-          borderBottom: '1px solid #16213E', // Theme border color
+          gap: 1,
+          px: 2,
+          py: 1.25,
+          borderBottom: `1px solid ${brand.border}`,
+          background: alpha(brand.surfaceMuted, 0.5),
         }}
       >
-        {/* Spacer to help center the title */}
-        <Box sx={{ width: 40 }} /> 
-        <Typography 
-          variant="h6" 
-          sx={{ 
-            color: 'white', 
-            fontWeight: 'bold', 
-            textAlign: 'center',
-            flexGrow: 1,
+        <DescriptionRounded sx={{ color: brand.textSubtle, fontSize: 18 }} />
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: brand.text,
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              fontFamily: '"JetBrains Mono", monospace',
+              fontSize: '0.85rem',
+            }}
+          >
+            {filePath || fileName || 'Untitled'}
+          </Typography>
+        </Box>
+        <Chip
+          size="small"
+          label={resolvedLanguage}
+          sx={{
+            height: 22,
+            fontSize: '0.7rem',
+            textTransform: 'lowercase',
+            background: alpha(brand.secondary, 0.15),
+            color: brand.secondary,
+            border: `1px solid ${alpha(brand.secondary, 0.35)}`,
           }}
-        >
-          {language.toUpperCase()}
-        </Typography>
-        <Tooltip title="Copy Code">
-          <IconButton onClick={handleCopy} size="small" sx={{ color: '#e0e0e0', width: 40 }}>
-            <CopyIcon fontSize="small" />
+        />
+        <Chip
+          size="small"
+          variant="outlined"
+          label={`${lineCount} lines`}
+          sx={{
+            height: 22,
+            fontSize: '0.7rem',
+            color: brand.textMuted,
+            borderColor: brand.border,
+          }}
+        />
+        <Tooltip title={copied ? 'Copied!' : 'Copy file contents'} arrow>
+          <IconButton onClick={handleCopy} size="small">
+            {copied ? (
+              <CheckRounded sx={{ fontSize: 18, color: brand.success }} />
+            ) : (
+              <ContentCopyRounded sx={{ fontSize: 18 }} />
+            )}
           </IconButton>
         </Tooltip>
       </Box>
+
+      {/* Code body */}
       <Box
-        component="pre"
         sx={{
-          flexGrow: 1,
+          flex: 1,
           overflow: 'auto',
-          margin: '0 !important',
-          padding: '16px',
-          fontFamily: 'monospace',
-          whiteSpace: 'pre-wrap', // Ensures text wraps
-          wordBreak: 'break-word', // Breaks long words
-          color: '#e0e0e0' // Light text for code
+          background: '#0b1024',
         }}
       >
-        <code>{content}</code>
+        {content ? (
+          <SyntaxHighlighter
+            language={resolvedLanguage}
+            style={vscDarkPlus as any}
+            showLineNumbers
+            wrapLongLines={false}
+            customStyle={{
+              margin: 0,
+              padding: '16px 18px',
+              background: 'transparent',
+              fontSize: '0.85rem',
+              minHeight: '100%',
+            }}
+            lineNumberStyle={{
+              minWidth: '2.4em',
+              paddingRight: '1em',
+              color: alpha(brand.text, 0.25),
+              userSelect: 'none',
+            }}
+            codeTagProps={{
+              style: { fontFamily: '"JetBrains Mono", monospace' },
+            }}
+          >
+            {content}
+          </SyntaxHighlighter>
+        ) : (
+          <Box
+            sx={{
+              p: 4,
+              color: brand.textMuted,
+              fontStyle: 'italic',
+              textAlign: 'center',
+            }}
+          >
+            (empty file)
+          </Box>
+        )}
       </Box>
+
+      <Snackbar
+        open={copied}
+        autoHideDuration={1600}
+        onClose={() => setCopied(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          sx={{ width: '100%', bgcolor: brand.success }}
+        >
+          Copied file contents
+        </Alert>
+      </Snackbar>
     </Paper>
   );
 };

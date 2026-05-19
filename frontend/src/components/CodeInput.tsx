@@ -9,10 +9,27 @@ import {
   Alert,
   CircularProgress,
   IconButton,
+  Stack,
+  Chip,
+  Tooltip,
+  Divider,
 } from '@mui/material';
-import { PlayArrow as RunIcon, ContentCopy as CopyIcon } from '@mui/icons-material';
+import {
+  PlayArrowRounded,
+  ContentCopyRounded,
+  AutoAwesomeRounded,
+  CheckCircleRounded,
+  WarningAmberRounded,
+  CodeRounded,
+  RestartAltRounded,
+} from '@mui/icons-material';
+import { alpha } from '@mui/material/styles';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-// Define the shape of the API response
+import { brand } from '../theme/theme';
+import MarkdownRenderer from './common/MarkdownRenderer';
+
 interface AnalysisResponse {
   is_correct: boolean;
   explanation: string;
@@ -20,34 +37,45 @@ interface AnalysisResponse {
 }
 
 interface CodeInputProps {
-  userToken: string;
+  /** Optional callback fired with the AI explanation after a successful analysis. */
+  onAnalysisComplete?: (preview: string) => void;
 }
 
-const CodeInput: React.FC<CodeInputProps> = ({ userToken }) => {
+const SAMPLE_CODE = `def factorial(n)
+    if n == 0:
+        return 1
+    else
+        return n * factorial(n-1)`;
+
+const SAMPLE_CONTEXT =
+  'A Python function to calculate factorial. I think there might be a syntax error.';
+
+const CodeInput: React.FC<CodeInputProps> = ({ onAnalysisComplete }) => {
   const [code, setCode] = useState('');
   const [context, setContext] = useState('');
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // --- ADDED BACK ---
-  // Function to load sample code into the input fields
-  const loadSampleCode = () => {
-    const sampleCode = `def factorial(n)
-    if n == 0:
-        return 1
-    else
-        return n * factorial(n-1)`;
-    
-    setCode(sampleCode);
-    setContext('A Python function to calculate factorial. I think there might be a syntax error.');
+  const loadSample = () => {
+    setCode(SAMPLE_CODE);
+    setContext(SAMPLE_CONTEXT);
+    setAnalysis(null);
+    setError(null);
   };
-  // --- END ADDED BACK ---
+
+  const reset = () => {
+    setCode('');
+    setContext('');
+    setAnalysis(null);
+    setError(null);
+  };
 
   const handleAnalyze = async () => {
-    const trimmedCode = code.trim();
-    if (!trimmedCode) {
-      setError('Please enter some code to analyze');
+    const trimmed = code.trim();
+    if (!trimmed) {
+      setError('Please paste in some code to analyze.');
       return;
     }
     setLoading(true);
@@ -55,126 +83,229 @@ const CodeInput: React.FC<CodeInputProps> = ({ userToken }) => {
     setAnalysis(null);
     try {
       const body = new URLSearchParams();
-      body.append('code', trimmedCode);
+      body.append('code', trimmed);
       body.append('context', context);
 
       const response = await axios.post<AnalysisResponse>(
-        'http://localhost:8000/api/explain/code', 
+        'http://localhost:8000/api/explain/code',
         body,
-        { 
-          headers: { 
-            Authorization: `Bearer ${userToken}`,
-            'Content-Type': 'application/x-www-form-urlencoded'
-          } 
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
         }
       );
       setAnalysis(response.data);
+      onAnalysisComplete?.(response.data.explanation.slice(0, 120));
     } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || err.message || 'Failed to analyze code';
-      setError(errorMessage);
+      setError(err?.response?.data?.detail || err?.message || 'Failed to analyze code.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCopy = (textToCopy: string) => {
-    navigator.clipboard.writeText(textToCopy);
+  const handleCopy = async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      window.setTimeout(() => setCopiedKey(null), 1400);
+    } catch {
+      // ignore
+    }
   };
 
   return (
-    <Paper sx={{ p: 3, background: 'linear-gradient(145deg, #1A1A2E 0%, #16213E 100%)' }}>
-      <Typography variant="h5" gutterBottom sx={{ color: 'white', mb: 2 }}>
-        Code Analysis
-      </Typography>
-
-      <TextField
-        fullWidth
-        label="Context (optional)"
-        value={context}
-        onChange={(e) => setContext(e.target.value)}
-        margin="normal"
-        size="small"
-        /* --- Styles --- */
-      />
-
-      <TextField
-        fullWidth
-        label="Paste your code here"
-        multiline
-        rows={8}
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        margin="normal"
-        /* --- Styles --- */
-      />
-
-      <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
-        <Button
-          variant="contained"
-          onClick={handleAnalyze}
-          disabled={loading || !code.trim()}
-          startIcon={loading ? <CircularProgress size={16} /> : <RunIcon />}
-          /* --- Styles --- */
-        >
-          {loading ? 'Analyzing...' : 'Analyze Code'}
-        </Button>
-
-        {/* --- ADDED BACK --- */}
-        <Button
-          variant="outlined"
-          onClick={loadSampleCode}
-          disabled={loading}
-          sx={{
-            borderRadius: '8px',
-            borderColor: 'rgba(255, 255, 255, 0.3)',
-            color: 'white',
-          }}
-        >
-          Load Sample
-        </Button>
-        {/* --- END ADDED BACK --- */}
-      </Box>
-
-      {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
-
-      {analysis && (
-        <Box sx={{ mt: 3 }}>
-          {/* Explanation Section */}
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            <Typography variant="h6" sx={{ color: 'white', flexGrow: 1 }}>
-              🤖 AI Analysis
-            </Typography>
-            <IconButton onClick={() => handleCopy(analysis.explanation)} size="small" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-              <CopyIcon fontSize="small" />
-            </IconButton>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {/* Input card */}
+      <Paper sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+          <Box
+            sx={{
+              width: 40,
+              height: 40,
+              borderRadius: 2,
+              display: 'grid',
+              placeItems: 'center',
+              background: alpha(brand.accent, 0.16),
+              color: brand.accent,
+            }}
+          >
+            <CodeRounded />
           </Box>
-          <Paper sx={{ p: 2, bgcolor: '#0A0A1A', border: '1px solid rgba(255, 255, 255, 0.1)', mb: 3 }}>
-            <Typography variant="body2" sx={{ color: 'white', whiteSpace: 'pre-wrap' }}>
-              {analysis.explanation}
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="h6" sx={{ color: brand.text, fontWeight: 700 }}>
+              Paste code, get an instant review
             </Typography>
-          </Paper>
+            <Typography variant="body2" sx={{ color: brand.textMuted }}>
+              Gemini will explain what it does — and flag any security issues it spots.
+            </Typography>
+          </Box>
+        </Stack>
 
-          {/* Corrected Code Section (Conditional) */}
+        <TextField
+          fullWidth
+          label="Context (optional)"
+          placeholder="e.g. 'This is a checkout handler called from /api/buy'"
+          value={context}
+          onChange={(e) => setContext(e.target.value)}
+          size="small"
+          sx={{ mb: 2 }}
+        />
+
+        <TextField
+          fullWidth
+          label="Paste your code here"
+          multiline
+          minRows={9}
+          maxRows={18}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          InputProps={{
+            sx: {
+              fontFamily: '"JetBrains Mono", monospace',
+              fontSize: '0.9rem',
+            },
+          }}
+        />
+
+        <Stack
+          direction="row"
+          spacing={1.25}
+          sx={{ mt: 2 }}
+          flexWrap="wrap"
+          useFlexGap
+        >
+          <Button
+            variant="contained"
+            onClick={handleAnalyze}
+            disabled={loading || !code.trim()}
+            startIcon={
+              loading ? <CircularProgress size={16} color="inherit" /> : <PlayArrowRounded />
+            }
+          >
+            {loading ? 'Analyzing…' : 'Analyze code'}
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={loadSample}
+            disabled={loading}
+            startIcon={<AutoAwesomeRounded />}
+          >
+            Try sample
+          </Button>
+          <Button
+            variant="text"
+            onClick={reset}
+            disabled={loading || (!code && !context && !analysis)}
+            startIcon={<RestartAltRounded />}
+          >
+            Reset
+          </Button>
+        </Stack>
+
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {error}
+          </Alert>
+        )}
+      </Paper>
+
+      {/* Output card */}
+      {analysis && (
+        <Paper sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+            <Chip
+              icon={
+                analysis.is_correct ? (
+                  <CheckCircleRounded sx={{ fontSize: 16 }} />
+                ) : (
+                  <WarningAmberRounded sx={{ fontSize: 16 }} />
+                )
+              }
+              label={analysis.is_correct ? 'No issues found' : 'Issues detected'}
+              sx={{
+                bgcolor: analysis.is_correct
+                  ? alpha(brand.success, 0.14)
+                  : alpha(brand.warning, 0.14),
+                color: analysis.is_correct ? '#a7f3d0' : '#fde68a',
+                border: `1px solid ${analysis.is_correct ? alpha(brand.success, 0.4) : alpha(brand.warning, 0.4)}`,
+                '& .MuiChip-icon': {
+                  color: analysis.is_correct ? brand.success : brand.warning,
+                },
+              }}
+            />
+            <Box sx={{ flex: 1 }} />
+            <Tooltip title={copiedKey === 'explanation' ? 'Copied!' : 'Copy explanation'} arrow>
+              <IconButton
+                size="small"
+                onClick={() => handleCopy(analysis.explanation, 'explanation')}
+              >
+                <ContentCopyRounded sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+
+          <Typography variant="overline" sx={{ color: brand.textSubtle, letterSpacing: '0.14em' }}>
+            AI EXPLANATION
+          </Typography>
+          <Box
+            sx={{
+              mt: 1,
+              p: 2,
+              borderRadius: 2,
+              border: `1px solid ${brand.border}`,
+              background: alpha(brand.surfaceMuted, 0.6),
+            }}
+          >
+            <MarkdownRenderer content={analysis.explanation} />
+          </Box>
+
           {!analysis.is_correct && analysis.corrected_code && (
             <>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <Typography variant="h6" sx={{ color: '#A8FF00', flexGrow: 1 }}>
-                  ✅ Corrected Code
+              <Divider sx={{ my: 3, borderColor: brand.border }} />
+              <Stack direction="row" alignItems="center" sx={{ mb: 1 }} spacing={1}>
+                <Typography variant="overline" sx={{ color: brand.textSubtle, letterSpacing: '0.14em' }}>
+                  CORRECTED CODE
                 </Typography>
-                <IconButton onClick={() => handleCopy(analysis.corrected_code!)} size="small" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                  <CopyIcon fontSize="small" />
-                </IconButton>
+                <Box sx={{ flex: 1 }} />
+                <Tooltip title={copiedKey === 'corrected' ? 'Copied!' : 'Copy corrected code'} arrow>
+                  <IconButton
+                    size="small"
+                    onClick={() => handleCopy(analysis.corrected_code!, 'corrected')}
+                  >
+                    <ContentCopyRounded sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+              <Box
+                sx={{
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  border: `1px solid ${alpha(brand.success, 0.35)}`,
+                  boxShadow: `0 0 0 4px ${alpha(brand.success, 0.06)}`,
+                }}
+              >
+                <SyntaxHighlighter
+                  language="auto"
+                  style={vscDarkPlus as any}
+                  customStyle={{
+                    margin: 0,
+                    padding: '14px 18px',
+                    background: '#0b1024',
+                    fontSize: '0.85rem',
+                  }}
+                  codeTagProps={{
+                    style: { fontFamily: '"JetBrains Mono", monospace' },
+                  }}
+                >
+                  {analysis.corrected_code}
+                </SyntaxHighlighter>
               </Box>
-              <Paper sx={{ p: 2, bgcolor: '#0A0A1A', border: '1px solid #A8FF00' }}>
-                <Typography component="pre" sx={{ color: '#00CED1', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
-                  <code>{analysis.corrected_code}</code>
-                </Typography>
-              </Paper>
             </>
           )}
-        </Box>
+        </Paper>
       )}
-    </Paper>
+    </Box>
   );
 };
 

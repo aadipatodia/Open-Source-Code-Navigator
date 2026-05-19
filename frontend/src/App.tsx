@@ -1,87 +1,114 @@
-// frontend/src/App.tsx
-import React from 'react';
-import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
-import { CssBaseline, Box, Container } from '@mui/material';
-import Navbar from './components/Navbar';
-import Dashboard from './components/Dashboard';
-import CodebaseAnalysis from './components/CodebaseAnalysis';
-import Login from './components/Login';
-import { ruruTheme } from './theme/theme';
-import './App.css';
-import { useSession, useUser, useDescope } from '@descope/react-sdk';
+import {
+  Box,
+  CssBaseline,
+  useMediaQuery,
+  Theme,
+} from '@mui/material';
+
+import { appTheme } from './theme/theme';
+import Sidebar, { SIDEBAR_WIDTH } from './components/Sidebar';
+import TopBar from './components/TopBar';
+import HomePage from './components/pages/HomePage';
+import ExplorePage from './components/pages/ExplorePage';
+import IssuesPage from './components/pages/IssuesPage';
+import AnalyzePage from './components/pages/AnalyzePage';
+import ChatPage from './components/pages/ChatPage';
+import GuidedContribution from './components/GuidedContribution';
+import { AppDataProvider, useAppData } from './context/AppDataContext';
 import { User } from './types';
 
-export default function App() {
-  const navigate = useNavigate();
+import './App.css';
 
-  // Auth/session hooks from Descope
-  const { isSessionLoading, isAuthenticated } = useSession();
-  const { user } = useUser();
-  const descope = useDescope();
+const DEFAULT_USER: User = {
+  userId: 'local-user',
+  name: 'Coder',
+  email: '',
+  picture: '',
+};
 
-  if (isSessionLoading) {
-    return <div>Loading...</div>;
-  }
+const AuthedShell: React.FC<{ user: User }> = ({ user }) => {
+  const isLargeScreen = useMediaQuery((t: Theme) => t.breakpoints.up('lg'));
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  const handleLogout = async () => {
-    try {
-      await descope.logout();
-      navigate('/login');
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
-  };
-
-  // Type-safe fallback for user
-  const safeUser: User = user
-  ? {
-      userId: user.userId,
-      name: user.name || '',
-      email: user.email || '',
-      picture: user.picture || '',
-    }
-  : { userId: '', name: '', email: '', picture: '' };
-
-
+  const {
+    isGuideOpen,
+    contributionPlan,
+    guideLoading,
+    guideError,
+    selectedIssueForGuide,
+    closeGuide,
+  } = useAppData();
 
   return (
-    <ThemeProvider theme={ruruTheme}>
-      <CssBaseline />
+    <Box className="app-shell" sx={{ display: 'flex', minHeight: '100vh' }}>
+      <Sidebar
+        open={mobileSidebarOpen}
+        onClose={() => setMobileSidebarOpen(false)}
+        variant={isLargeScreen ? 'permanent' : 'temporary'}
+      />
+
       <Box
         sx={{
-          minHeight: '100vh',
-          background: `linear-gradient(135deg, ${ruruTheme.palette.background.default} 0%, #1A1A2E 50%, #16213E 100%)`,
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          ml: { lg: 0 },
+          width: { lg: `calc(100% - ${SIDEBAR_WIDTH}px)` },
         }}
       >
-        {isAuthenticated && <Navbar user={safeUser} onLogout={handleLogout} />}
+        <TopBar
+          user={user}
+          onOpenSidebar={() => setMobileSidebarOpen(true)}
+          showMenuButton={!isLargeScreen}
+        />
 
-        <Container maxWidth="xl" sx={{ mt: 2 }}>
+        <Box
+          component="main"
+          sx={{
+            flex: 1,
+            px: { xs: 2, sm: 3, md: 4 },
+            py: { xs: 2.5, md: 4 },
+            maxWidth: 1400,
+            width: '100%',
+            mx: 'auto',
+          }}
+        >
           <Routes>
-            <Route
-              path="/login"
-              element={isAuthenticated ? <Navigate to="/" /> : <Login />}
-            />
-            {isAuthenticated ? (
-              <>
-                <Route path="/" element={<Dashboard user={safeUser} />} />
-                <Route
-                  path="/codebase-analysis"
-                  element={
-                    <CodebaseAnalysis
-                      content="Sample code content"
-                      language="javascript"
-                      user={safeUser}
-                    />
-                  }
-                />
-              </>
-            ) : (
-              <Route path="/*" element={<Navigate to="/login" />} />
-            )}
+            <Route path="/" element={<HomePage user={user} />} />
+            <Route path="/explore" element={<ExplorePage user={user} />} />
+            <Route path="/issues" element={<IssuesPage />} />
+            <Route path="/analyze" element={<AnalyzePage />} />
+            <Route path="/chat" element={<ChatPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </Container>
+        </Box>
       </Box>
+
+      <GuidedContribution
+        open={isGuideOpen}
+        onClose={closeGuide}
+        plan={contributionPlan}
+        loading={guideLoading}
+        error={guideError}
+        issueTitle={selectedIssueForGuide?.title || ''}
+        issueUrl={selectedIssueForGuide?.url}
+        repoName={selectedIssueForGuide?.repoName}
+      />
+    </Box>
+  );
+};
+
+export default function App() {
+  return (
+    <ThemeProvider theme={appTheme}>
+      <CssBaseline />
+      <AppDataProvider>
+        <AuthedShell user={DEFAULT_USER} />
+      </AppDataProvider>
     </ThemeProvider>
   );
 }

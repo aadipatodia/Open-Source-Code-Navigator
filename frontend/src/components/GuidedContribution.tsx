@@ -9,11 +9,22 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Paper,
+  Stack,
+  Chip,
+  Button,
 } from '@mui/material';
-import { Close as CloseIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material';
+import {
+  CloseRounded,
+  ExpandMoreRounded,
+  AutoAwesomeRounded,
+  LaunchRounded,
+  GitHub,
+} from '@mui/icons-material';
+import { alpha } from '@mui/material/styles';
 
-// Define the shape of a single contribution step
+import { brand, brandGradient } from '../theme/theme';
+import MarkdownRenderer from './common/MarkdownRenderer';
+
 interface ContributionStep {
   step: number;
   title: string;
@@ -27,90 +38,180 @@ interface GuidedContributionProps {
   loading: boolean;
   error: string;
   issueTitle: string;
+  issueUrl?: string;
+  repoName?: string;
 }
 
-const style = {
-  position: 'absolute' as 'absolute',
-  top: '50%',
-  left: '50%',
-  transform: 'translate(-50%, -50%)',
-  width: '90%',
-  maxWidth: 800,
-  bgcolor: '#1A1A2E',
-  border: '2px solid #00CED1',
-  boxShadow: 24,
-  p: 4,
-  color: 'white',
-  borderRadius: '16px',
-  maxHeight: '90vh',
-  display: 'flex',
-  flexDirection: 'column',
-};
-
-const GuidedContribution: React.FC<GuidedContributionProps> = ({ open, onClose, plan, loading, error, issueTitle }) => {
+const GuidedContribution: React.FC<GuidedContributionProps> = ({
+  open,
+  onClose,
+  plan,
+  loading,
+  error,
+  issueTitle,
+  issueUrl,
+  repoName,
+}) => {
   return (
     <Modal
       open={open}
       onClose={onClose}
       aria-labelledby="guided-contribution-title"
+      sx={{ display: 'grid', placeItems: 'center', p: { xs: 1.5, sm: 3 } }}
     >
-      <Box sx={style}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography id="guided-contribution-title" variant="h5" component="h2" sx={{ color: '#A8FF00' }}>
-            AI Contribution Plan
-          </Typography>
-          <IconButton onClick={onClose} sx={{ color: 'white' }}>
-            <CloseIcon />
-          </IconButton>
-        </Box>
-        <Typography variant="body1" sx={{ fontStyle: 'italic', mb: 2 }}>
-          For issue: "{issueTitle}"
-        </Typography>
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: 900,
+          maxHeight: '92vh',
+          display: 'flex',
+          flexDirection: 'column',
+          bgcolor: brand.surface,
+          borderRadius: 4,
+          border: `1px solid ${brand.border}`,
+          boxShadow: '0 30px 80px rgba(0, 0, 0, 0.6)',
+          overflow: 'hidden',
+          outline: 'none',
+        }}
+      >
+        {/* Header */}
+        <Box
+          sx={{
+            p: { xs: 2.5, sm: 3 },
+            borderBottom: `1px solid ${brand.border}`,
+            background: `linear-gradient(135deg, ${alpha(brand.primary, 0.18)} 0%, ${alpha(brand.secondary, 0.1)} 100%)`,
+            position: 'relative',
+          }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Chip
+                icon={<AutoAwesomeRounded sx={{ fontSize: 14 }} />}
+                label="AI Contribution Plan"
+                size="small"
+                sx={{
+                  bgcolor: alpha(brand.secondary, 0.16),
+                  color: brand.secondary,
+                  border: `1px solid ${alpha(brand.secondary, 0.4)}`,
+                  '& .MuiChip-icon': { color: brand.secondary },
+                  mb: 1.5,
+                }}
+              />
+              <Typography
+                id="guided-contribution-title"
+                variant="h5"
+                sx={{
+                  fontWeight: 800,
+                  color: brand.text,
+                  lineHeight: 1.25,
+                  pr: 2,
+                }}
+              >
+                {issueTitle || 'Generating plan…'}
+              </Typography>
+              {repoName && (
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                  <GitHub sx={{ fontSize: 16, color: brand.textSubtle }} />
+                  <Typography variant="caption" sx={{ color: brand.textMuted, fontFamily: '"JetBrains Mono", monospace' }}>
+                    {repoName}
+                  </Typography>
+                </Stack>
+              )}
+            </Box>
+            <IconButton onClick={onClose}>
+              <CloseRounded />
+            </IconButton>
+          </Box>
 
-        <Paper sx={{ flexGrow: 1, overflowY: 'auto', p: 2, background: 'rgba(0,0,0,0.2)' }}>
+          {issueUrl && (
+            <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                href={issueUrl}
+                target="_blank"
+                rel="noreferrer"
+                startIcon={<LaunchRounded />}
+              >
+                Open issue on GitHub
+              </Button>
+            </Stack>
+          )}
+        </Box>
+
+        {/* Body */}
+        <Box
+          sx={{
+            flex: 1,
+            overflowY: 'auto',
+            p: { xs: 2, sm: 3 },
+            background: brand.bg,
+          }}
+        >
           {loading && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-              <CircularProgress sx={{ mr: 2 }} />
-              <Typography>Generating your personalized contribution guide...</Typography>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                py: 8,
+                gap: 2,
+              }}
+            >
+              <CircularProgress />
+              <Typography sx={{ color: brand.textMuted, textAlign: 'center' }}>
+                Generating your personalized contribution plan…
+              </Typography>
+              <Typography variant="caption" sx={{ color: brand.textSubtle, textAlign: 'center' }}>
+                This involves cloning the repo and asking Gemini for a step-by-step roadmap.
+              </Typography>
             </Box>
           )}
 
-          {error && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {error}
-            </Alert>
+          {error && <Alert severity="error">{error}</Alert>}
+
+          {!loading && !error && plan && plan.length > 0 && (
+            <Box>
+              {plan.map((step, index) => (
+                <Accordion key={step.step ?? index} defaultExpanded={index === 0}>
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreRounded sx={{ color: brand.textMuted }} />}
+                  >
+                    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
+                      <Box
+                        sx={{
+                          minWidth: 28,
+                          height: 28,
+                          borderRadius: '50%',
+                          display: 'grid',
+                          placeItems: 'center',
+                          background: brandGradient,
+                          color: '#fff',
+                          fontWeight: 700,
+                          fontSize: '0.85rem',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {step.step ?? index + 1}
+                      </Box>
+                      <Typography sx={{ fontWeight: 700, color: brand.text }}>
+                        {step.title}
+                      </Typography>
+                    </Stack>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <MarkdownRenderer content={step.details} />
+                  </AccordionDetails>
+                </Accordion>
+              ))}
+            </Box>
           )}
 
-          {!loading && !error && plan && (
-            plan.map((step, index) => (
-              <Accordion 
-                key={index} 
-                defaultExpanded={index === 0}
-                sx={{ 
-                    bgcolor: '#16213E', 
-                    color: 'white', 
-                    mb: 1,
-                    '&.Mui-expanded': {
-                        margin: '8px 0',
-                    }
-                }}
-              >
-                <AccordionSummary
-                  expandIcon={<ExpandMoreIcon sx={{ color: '#00CED1' }} />}
-                  aria-controls={`panel${index}-content`}
-                  id={`panel${index}-header`}
-                >
-                  <Typography sx={{ fontWeight: 'bold' }}>Step {step.step}: {step.title}</Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ bgcolor: 'rgba(0,0,0,0.3)', borderTop: '1px solid #00CED1' }}>
-                  <Typography sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.7, fontFamily: '"Fira Code", monospace' }}>
-                    {step.details}
-                  </Typography>
-                </AccordionDetails>
-              </Accordion>
-            ))
+          {!loading && !error && plan && plan.length === 0 && (
+            <Alert severity="info">No plan was returned. Try a different issue.</Alert>
           )}
-        </Paper>
+        </Box>
       </Box>
     </Modal>
   );
