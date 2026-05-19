@@ -45,7 +45,7 @@ GEMINI_GENERATION_CONFIG = {
     "temperature": 0.4,
     "top_p": 0.95,
     "top_k": 40,
-    "max_output_tokens": 4096,
+    "max_output_tokens": 8192,
 }
 
 gemini_model = genai.GenerativeModel(
@@ -341,12 +341,16 @@ async def get_contribution_guide(request: GuidedContributionRequest):
 
     # --- Contribution guide prompt ---
     system_instruction = (
-        "You are a patient open-source maintainer mentoring a first-time contributor. "
-        "You write precise, file-aware plans that a beginner can actually follow. "
-        "You never fabricate files, functions, or APIs that are not supported by the provided context."
+        "You are a senior open-source maintainer mentoring a first-time contributor. "
+        "You write thorough, file-aware, technically-precise contribution plans that a beginner "
+        "can follow end-to-end without getting stuck. You prefer concrete code, exact commands, "
+        "and named files/functions over vague advice. You never fabricate files, functions, "
+        "or APIs that are not supported by the provided repository context — when uncertain, "
+        "you say so explicitly and explain how the contributor can confirm."
     )
 
-    prompt = f"""You will produce a step-by-step contribution plan for the GitHub issue below.
+    prompt = f"""You will produce a DETAILED, end-to-end contribution plan for the GitHub issue below.
+Aim for a plan that a motivated beginner can follow without needing to ask follow-up questions.
 
 ## Issue
 - Repository: {request.repoUrl}
@@ -361,41 +365,59 @@ async def get_contribution_guide(request: GuidedContributionRequest):
 {file_tree_string}
 ```
 
-## Output rules (read carefully)
+## Output rules (read carefully — the application parses this output)
 1. Use the EXACT section headings below, each on its own line, surrounded by `**`. The downstream parser depends on this format.
-2. Do not invent files that are not in the structure above; if you are unsure, say "likely located in ..." instead of guessing a path.
-3. Prefer concrete actions ("Open `src/foo.ts` and update the `bar` function to ...") over vague advice.
-4. Use Markdown bullets and fenced code blocks for any code snippets.
-5. Keep each step focused; if a step is getting long, split it across "Detailed Implementation" steps.
+2. Do not invent files that are not in the structure above; if you are unsure, say "likely located in ..." and describe how to confirm (e.g., `grep -R "symbol" .`).
+3. Prefer concrete, actionable instructions ("Open `src/foo.ts` and update the `bar` function to ...") over vague advice ("look around the codebase").
+4. Use Markdown bullets, numbered lists, and fenced code blocks (with language tags) for commands, diffs, and snippets.
+5. Be GENEROUS with detail. Each step (other than Step 1) should be MULTI-PARAGRAPH and include explicit commands, file paths, function/class names, and rationale.
+6. Where a code change is involved, show a realistic snippet (before/after, or a minimal diff). It does not need to be perfect — annotate any assumptions with "ASSUMPTION: ...".
+7. Anticipate common beginner pitfalls and call them out inline ("Heads up: ...").
+8. Do NOT add sections beyond the ones listed; do NOT use Step 6+. Put everything else inside the existing sections.
 
-## Required sections (in order)
+## Required sections (in this order, with this depth)
 
 **Step 1: Understand the Problem**
-- Restate the issue in plain language, including what is broken / missing / desired.
-- Define what "done" looks like — i.e., the acceptance criteria for a successful PR.
+- Restate the issue in plain language: what is broken / missing / desired, and for whom.
+- Identify the affected user flow or subsystem.
+- Define a precise "definition of done" / acceptance criteria checklist (3–6 items) for a successful PR.
+- Note any open questions a maintainer might need to clarify before coding.
 
 **Step 2: High-Level Roadmap**
-- Describe the overall approach in 3–5 bullets.
-- List the most likely files / directories to touch (referencing the structure above).
-- Call out any prerequisites (env vars, accounts, tools) the contributor needs.
+- Describe the overall approach in 4–7 detailed bullets, in execution order.
+- For each bullet, name the most likely files / directories to touch (referencing the structure above) and the role each plays.
+- Diagram the data/control flow in prose if it helps ("Request hits `X`, which calls `Y`, which reads from `Z`...").
+- List prerequisites: required tooling versions, env vars, accounts, OS notes, and how to install them.
+- Call out risks, edge cases, and alternative approaches considered.
 
 **Step 3: Detailed Implementation - First Action**
-- Give the very first concrete action (e.g., "Fork the repo, clone it, run `npm install`, then open `path/to/file`").
-- Include any starter code edits with fenced code blocks.
+- Walk through the very first concrete actions step-by-step:
+  1. Fork + clone commands (with exact `git` commands).
+  2. Install / bootstrap commands (e.g., `npm install`, `pip install -r requirements.txt`, `make setup`) — pick the right one based on the file tree.
+  3. How to run the project locally and reproduce the bug or current behavior (commands + URL/port if applicable).
+  4. Which file to open first and what to read inside it to build a mental model.
+- Include a starter code edit or scaffold with a fenced code block when useful.
 
 **Step 4: Detailed Implementation - Next Steps**
-- Provide an ordered list of follow-up actions to complete the fix/feature.
-- For each action: which file, which function, what to change, and *why*.
-- Include code snippets where useful.
+- Provide an ordered, NUMBERED list of follow-up actions to fully implement the fix/feature.
+- For each numbered action, include ALL of the following sub-bullets:
+  - **File**: exact path from the tree.
+  - **What to change**: function/class/section to modify or add.
+  - **Why**: how this advances the acceptance criteria.
+  - **Snippet**: a short fenced code block showing the change (before → after, or a diff). Mark assumptions clearly.
+  - **Verify**: how to confirm this step worked (run a command, check a UI element, run a test).
+- Include at least 4 numbered actions. More is better if the issue warrants it.
 
 **Step 5: Testing the Changes**
-- Describe how to verify the fix locally: unit tests, integration tests, manual UI checks, or CLI commands.
-- Mention how to add or update tests if the project has a test suite.
+- Describe how to verify the fix locally end-to-end.
+- List specific commands: unit tests, integration tests, linters, type checks, manual UI checks, or CLI smoke tests. Use the project's actual tooling where it is visible in the file tree.
+- Explain how to add or update tests: which test file to touch, what cases to cover (happy path, edge cases, regression for the original bug).
+- Describe how to write a clear PR description and link the issue ("Fixes #N").
 
 **Final Advice**
-- 2–4 short bullets of encouragement and pointers (e.g., draft PR early, link the issue, ask in discussions).
+- 4–6 substantive bullets covering: opening a draft PR early, keeping commits focused, following the project's contribution guide / code style, responding to review feedback, and where to ask for help (Discussions, Discord, issue thread).
 
-Stay strictly within this format — the application parses it programmatically."""
+Stay strictly within this format — the application parses it programmatically. Use Markdown freely INSIDE each section, but do not rename or skip section headings."""
 
     logger.info(f"Generating contribution guide for issue: {request.issueTitle}")
     ai_response = generate_with_gemini(prompt, system_instruction=system_instruction)

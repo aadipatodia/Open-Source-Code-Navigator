@@ -164,7 +164,7 @@ const GuidedContribution: React.FC<GuidedContributionProps> = ({
                 Generating your personalized contribution plan…
               </Typography>
               <Typography variant="caption" sx={{ color: brand.textSubtle, textAlign: 'center' }}>
-                This involves cloning the repo and asking Gemini for a step-by-step roadmap.
+                This involves cloning the repo and asking AI for a step-by-step roadmap.
               </Typography>
             </Box>
           )}

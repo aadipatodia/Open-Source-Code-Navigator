@@ -9,7 +9,6 @@ import {
   ListItemText,
   Typography,
   Divider,
-  Tooltip,
 } from '@mui/material';
 import {
   HomeRounded,
@@ -18,7 +17,6 @@ import {
   BiotechRounded,
   ChatBubbleRounded,
   AutoAwesomeRounded,
-  LaunchRounded,
 } from '@mui/icons-material';
 import { NavLink, useLocation } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
@@ -145,46 +143,6 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
             );
           })}
         </List>
-      </Box>
-
-      {/* Footer card */}
-      <Box sx={{ p: 1.5 }}>
-        <Box
-          sx={{
-            p: 1.75,
-            borderRadius: 14,
-            border: `1px solid ${brand.border}`,
-            background:
-              `linear-gradient(135deg, ${alpha(brand.primary, 0.14)} 0%, ${alpha(brand.secondary, 0.08)} 100%)`,
-          }}
-        >
-          <Typography variant="caption" sx={{ color: brand.secondary, fontWeight: 600 }}>
-            POWERED BY
-          </Typography>
-          <Typography variant="body2" sx={{ color: brand.text, fontWeight: 700, mt: 0.25 }}>
-            Gemini 2.5 Flash
-          </Typography>
-          <Tooltip title="Open Google AI Studio" arrow>
-            <Box
-              component="a"
-              href="https://aistudio.google.com/"
-              target="_blank"
-              rel="noreferrer"
-              sx={{
-                mt: 0.75,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 0.5,
-                color: brand.textMuted,
-                fontSize: '0.75rem',
-                textDecoration: 'none',
-                '&:hover': { color: brand.text },
-              }}
-            >
-              aistudio.google.com <LaunchRounded sx={{ fontSize: 14 }} />
-            </Box>
-          </Tooltip>
-        </Box>
       </Box>
     </Box>
   );

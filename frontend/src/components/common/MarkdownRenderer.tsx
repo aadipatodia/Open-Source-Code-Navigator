@@ -18,12 +18,19 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     <Box className={className}>
       <ReactMarkdown
         components={{
-          code({ node, inline, className: codeClassName, children, ...props }: any) {
+          // Avoid an extra <pre> wrapper around SyntaxHighlighter (PreTag="motion").
+          pre({ children }) {
+            return <>{children}</>;
+          },
+          code({ className: codeClassName, children, ...props }: any) {
             const match = /language-(\w+)/.exec(codeClassName || '');
-            const language = match ? match[1] : 'text';
-            const codeString = String(children).replace(/\n$/, '');
+            const raw = String(children ?? '');
+            const codeString = raw.replace(/\n$/, '').trim();
+            // react-markdown v10 removed the `inline` prop. Fenced blocks carry
+            // `language-*` and/or a newline; everything else is inline.
+            const isBlock = Boolean(match) || raw.includes('\n');
 
-            if (inline) {
+            if (!isBlock) {
               return (
                 <code className={codeClassName} {...props}>
                   {children}
@@ -31,6 +38,12 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               );
             }
 
+            // Models often emit empty fenced blocks between bullets — skip them.
+            if (!codeString) {
+              return null;
+            }
+
+            const language = match ? match[1] : 'text';
             return (
               <SyntaxHighlighter
                 language={language}

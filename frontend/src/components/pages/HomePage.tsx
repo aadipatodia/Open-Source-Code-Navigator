@@ -5,7 +5,6 @@ import {
   Typography,
   Stack,
   Button,
-  Chip,
   Divider,
 } from '@mui/material';
 import {
@@ -14,7 +13,6 @@ import {
   BiotechRounded,
   ChatBubbleRounded,
   ArrowForwardRounded,
-  AutoAwesomeRounded,
   HistoryRounded,
   BookmarkBorderRounded,
   BoltRounded,
@@ -84,18 +82,6 @@ const HomePage: React.FC<HomePageProps> = ({ user }) => {
              linear-gradient(180deg, ${brand.surface} 0%, ${brand.surfaceMuted} 100%)`,
         }}
       >
-        <Chip
-          icon={<AutoAwesomeRounded sx={{ fontSize: 16 }} />}
-          label="Powered by Gemini 2.5 Flash"
-          size="small"
-          sx={{
-            bgcolor: alpha(brand.secondary, 0.14),
-            color: brand.secondary,
-            border: `1px solid ${alpha(brand.secondary, 0.4)}`,
-            '& .MuiChip-icon': { color: brand.secondary },
-            mb: 2,
-          }}
-        />
         <Typography
           variant="h3"
           sx={{

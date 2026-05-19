@@ -6,11 +6,9 @@ import {
   Typography,
   IconButton,
   Avatar,
-  Chip,
 } from '@mui/material';
-import { MenuRounded, AutoAwesomeRounded } from '@mui/icons-material';
+import { MenuRounded } from '@mui/icons-material';
 import { useLocation } from 'react-router-dom';
-import { alpha } from '@mui/material/styles';
 import { brand } from '../theme/theme';
 import { User } from '../types';
 
@@ -78,20 +76,6 @@ const TopBar: React.FC<TopBarProps> = ({ user, onOpenSidebar, showMenuButton }) 
             >
               {title}
             </Typography>
-            <Chip
-              size="small"
-              icon={<AutoAwesomeRounded sx={{ fontSize: 14 }} />}
-              label="Gemini 2.5 Flash"
-              sx={{
-                ml: 1,
-                height: 24,
-                bgcolor: alpha(brand.secondary, 0.14),
-                color: brand.secondary,
-                border: `1px solid ${alpha(brand.secondary, 0.4)}`,
-                '& .MuiChip-icon': { color: brand.secondary },
-                display: { xs: 'none', sm: 'inline-flex' },
-              }}
-            />
           </Box>
           <Typography
             variant="body2"
