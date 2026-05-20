@@ -28,6 +28,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import { brand } from '../theme/theme';
+import { API_BASE } from '../config/api';
 import MarkdownRenderer from './common/MarkdownRenderer';
 
 interface AnalysisResponse {
@@ -87,7 +88,7 @@ const CodeInput: React.FC<CodeInputProps> = ({ onAnalysisComplete }) => {
       body.append('context', context);
 
       const response = await axios.post<AnalysisResponse>(
-        'http://localhost:8000/api/explain/code',
+        `${API_BASE}/api/explain/code`,
         body,
         {
           headers: {

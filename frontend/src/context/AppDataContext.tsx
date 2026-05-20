@@ -7,6 +7,7 @@ import React, {
 } from 'react';
 import axios from 'axios';
 import { FileItem } from '../components/FileExplorer';
+import { API_BASE } from '../config/api';
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -37,8 +38,6 @@ export interface AnalysisHistoryItem {
   preview: string;
   timestamp: number;
 }
-
-const API_BASE = 'http://localhost:8000';
 
 // ---------------------------------------------------------------------------
 // Context shape
@@ -313,4 +312,4 @@ export const useAppData = (): AppDataContextValue => {
   return ctx;
 };
 
-export { API_BASE };
+export { API_BASE } from '../config/api';
