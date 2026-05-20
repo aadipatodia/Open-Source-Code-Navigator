@@ -121,7 +121,7 @@ For production, copy `frontend/.env.example` to `.env.local` and set `REACT_APP_
 
 Alternative (Native Python): Root Directory = `backend`, Environment variable **`PYTHON_VERSION` = `3.12.8`** (required — `runtime.txt` alone may not override 3.14), Build = `pip install -r requirements.txt` or `./build.sh`, Start = `uvicorn main:app --host 0.0.0.0 --port $PORT`. After changing Python version, **clear build cache** and redeploy.
 
-Set `GEMINI_API_KEY`. CORS already allows [https://open-source-code-navigator.vercel.app](https://open-source-code-navigator.vercel.app) and Vercel preview URLs for that project.
+Set `GEMINI_API_KEY` and **`GITHUB_TOKEN`** (fine-grained or classic PAT with public repo read — fixes issue search rate limits). CORS already allows [https://open-source-code-navigator.vercel.app](https://open-source-code-navigator.vercel.app) and Vercel preview URLs for that project.
 
 **Vercel (frontend)** — Root Directory: `frontend`, Install: `npm install --legacy-peer-deps`, Build: `npm run build`, Output: `build`. Set `REACT_APP_API_BASE` to your Render backend URL (no trailing slash), e.g. `https://open-source-code-navigator.onrender.com`.
 

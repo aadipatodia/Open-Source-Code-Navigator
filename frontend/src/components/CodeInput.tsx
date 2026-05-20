@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import axios from 'axios';
 import {
   Paper,
   TextField,
@@ -28,7 +27,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import { brand } from '../theme/theme';
-import { API_BASE } from '../config/api';
+import { apiClient, getApiError } from '../config/api';
 import MarkdownRenderer from './common/MarkdownRenderer';
 
 interface AnalysisResponse {
@@ -87,19 +86,15 @@ const CodeInput: React.FC<CodeInputProps> = ({ onAnalysisComplete }) => {
       body.append('code', trimmed);
       body.append('context', context);
 
-      const response = await axios.post<AnalysisResponse>(
-        `${API_BASE}/api/explain/code`,
-        body,
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-        }
-      );
+      const response = await apiClient.post<AnalysisResponse>('/api/explain/code', body, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
       setAnalysis(response.data);
       onAnalysisComplete?.(response.data.explanation.slice(0, 120));
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || 'Failed to analyze code.');
+    } catch (err: unknown) {
+      setError(getApiError(err, 'Failed to analyze code.'));
     } finally {
       setLoading(false);
     }

@@ -5,9 +5,8 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import axios from 'axios';
 import { FileItem } from '../components/FileExplorer';
-import { API_BASE } from '../config/api';
+import { apiClient, getApiError } from '../config/api';
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -123,11 +122,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
     setSelectedFile(null);
     setFileContent('');
     try {
-      const res = await axios.post(`${API_BASE}/api/analyze/repo`, { repoUrl: url });
+      const res = await apiClient.post('/api/analyze/repo', { repoUrl: url });
       setRepoStructure(res.data.structure);
       setRepoUrl(url);
-    } catch (err: any) {
-      setRepoError(err?.response?.data?.detail || 'Failed to analyze repository.');
+    } catch (err: unknown) {
+      setRepoError(getApiError(err, 'Failed to analyze repository.'));
     } finally {
       setRepoLoading(false);
     }
@@ -140,7 +139,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
       setFileLoading(true);
       setFileContent('');
       try {
-        const res = await axios.get(`${API_BASE}/api/repo/file_content`, {
+        const res = await apiClient.get('/api/repo/file_content', {
           params: { repo_url: repoUrl, file_path: file.path },
         });
         setFileContent(res.data.content);
@@ -158,10 +157,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
     setIssuesLoading(true);
     setIssuesError('');
     try {
-      const res = await axios.post(`${API_BASE}/api/issues/find`, { skills });
+      const res = await apiClient.post('/api/issues/find', { skills });
       setIssues(res.data);
-    } catch (err: any) {
-      setIssuesError(err?.response?.data?.detail || 'Failed to find issues.');
+    } catch (err: unknown) {
+      setIssuesError(getApiError(err, 'Failed to find issues.'));
       setIssues([]);
     } finally {
       setIssuesLoading(false);
@@ -176,15 +175,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
     setContributionPlan(null);
     try {
       const repoFullUrl = `https://github.com/${issue.repoName}`;
-      const res = await axios.post(`${API_BASE}/api/contribute/guide`, {
+      const res = await apiClient.post('/api/contribute/guide', {
         repoUrl: repoFullUrl,
         issueUrl: issue.url,
         issueTitle: issue.title,
         issueBody: '',
       });
       setContributionPlan(res.data.plan);
-    } catch (err: any) {
-      setGuideError(err?.response?.data?.detail || 'Failed to generate contribution guide.');
+    } catch (err: unknown) {
+      setGuideError(getApiError(err, 'Failed to generate contribution guide.'));
     } finally {
       setGuideLoading(false);
     }
@@ -206,7 +205,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
     setChatMessages((prev) => [...prev, userMessage]);
     setChatLoading(true);
     try {
-      const res = await axios.post(`${API_BASE}/api/chat`, { message: trimmed });
+      const res = await apiClient.post('/api/chat', { message: trimmed });
       const aiMessage: ChatMessage = {
         id: `${Date.now()}-a`,
         text: res.data.response || '...',

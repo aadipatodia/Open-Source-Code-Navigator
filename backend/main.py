@@ -13,6 +13,7 @@ import git
 import re
 import uvicorn
 import google.generativeai as genai
+import requests
 
 # --- Basic Configuration ---
 logging.basicConfig(level=logging.DEBUG)
@@ -49,6 +50,15 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 if not GEMINI_API_KEY:
     logger.error("FATAL: GEMINI_API_KEY (or GOOGLE_API_KEY) not found in .env file. AI features will not work.")
     raise RuntimeError("Gemini API key not configured")
+
+_github_token = os.getenv("GITHUB_TOKEN", "").strip()
+if _github_token:
+    logger.info("GITHUB_TOKEN is set — GitHub API rate limits are increased.")
+else:
+    logger.warning(
+        "GITHUB_TOKEN is not set — anonymous GitHub API limits apply (issue search may fail on Render). "
+        "Add a token at https://github.com/settings/tokens"
+    )
 
 genai.configure(api_key=GEMINI_API_KEY)
 
@@ -126,9 +136,90 @@ def handle_remove_readonly(func, path, exc_info):
     func(path)
 
 def get_github_client() -> Github:
-    """Return an anonymous GitHub client. Only public data is accessed; rate
-    limited to 60 req/hr per IP, which is plenty for casual exploration."""
-    return Github()
+    """GitHub client — uses GITHUB_TOKEN when set (recommended for production)."""
+    token = os.getenv("GITHUB_TOKEN", "").strip()
+    return Github(login_or_token=token) if token else Github()
+
+
+def _repo_name_from_api_url(repository_url: str) -> str:
+    marker = "/repos/"
+    if marker in repository_url:
+        return repository_url.split(marker, 1)[1]
+    return "unknown/repo"
+
+
+def search_github_issues(skills: str, *, limit: int = 15, timeout: int = 25) -> List[Issue]:
+    """Search GitHub for good-first issues with a hard HTTP timeout."""
+    skills_query = " ".join(part.strip() for part in skills.split(",") if part.strip())
+    if not skills_query:
+        raise HTTPException(status_code=400, detail="Please enter at least one skill to search for.")
+
+    query = f'{skills_query} is:issue is:open label:"good first issue"'
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = os.getenv("GITHUB_TOKEN", "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    logger.info(
+        "GitHub issue search (single REST call, authenticated=%s): %s",
+        bool(token),
+        query,
+    )
+
+    try:
+        response = requests.get(
+            "https://api.github.com/search/issues",
+            params={"q": query, "sort": "created", "order": "desc", "per_page": limit},
+            headers=headers,
+            timeout=timeout,
+        )
+    except requests.Timeout as exc:
+        logger.error(f"GitHub search timed out after {timeout}s: {exc}")
+        raise HTTPException(
+            status_code=504,
+            detail="GitHub search timed out. Try again in a moment.",
+        ) from exc
+    except requests.RequestException as exc:
+        logger.error(f"GitHub search request failed: {exc}")
+        raise HTTPException(
+            status_code=502,
+            detail="Could not reach GitHub. Try again shortly.",
+        ) from exc
+
+    if response.status_code == 403:
+        message = response.json().get("message", "GitHub API rate limit exceeded")
+        logger.error(f"GitHub search forbidden: {message}")
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"{message}. Add a GITHUB_TOKEN in Render environment variables "
+                "for higher limits (create at https://github.com/settings/tokens)."
+            ),
+        )
+
+    if response.status_code >= 400:
+        message = response.json().get("message", response.text)
+        logger.error(f"GitHub search failed ({response.status_code}): {message}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"GitHub search failed: {message}",
+        )
+
+    items = response.json().get("items", [])
+    logger.info("GitHub search returned %d issues", len(items))
+    return [
+        Issue(
+            id=item["id"],
+            title=item["title"],
+            url=item["html_url"],
+            repoName=_repo_name_from_api_url(item.get("repository_url", "")),
+            labels=[label["name"] for label in item.get("labels", [])],
+        )
+        for item in items[:limit]
+    ]
 
 def generate_with_gemini(prompt: str, system_instruction: Optional[str] = None) -> str:
     """Send a prompt to Gemini 2.5 Flash and return the generated text.
@@ -516,27 +607,15 @@ async def get_file_content(repo_url: str = Query(...), file_path: str = Query(..
 @app.post("/api/issues/find", response_model=List[Issue])
 async def find_issues(request: FindIssuesRequest):
     logger.debug(f"Searching issues with skills: {request.skills}")
-    g = get_github_client()
-    skills_query = ' '.join(request.skills.split(','))
-    query = f'{skills_query} is:issue is:open label:"good first issue"'
     try:
-        issues = g.search_issues(query, sort='created', order='desc')
-        results = [
-            Issue(
-                id=issue.id,
-                title=issue.title,
-                url=issue.html_url,
-                repoName=issue.repository.full_name,
-                labels=[label.name for label in issue.labels],
-            )
-            for issue in issues[:15]
-        ]
-        logger.info(f"Found {len(results)} issues for query: {query}")
+        results = search_github_issues(request.skills)
+        logger.info(f"Found {len(results)} issues for skills: {request.skills}")
         return results
-    except GithubException as e:
-        message = e.data.get('message', 'Unknown error') if hasattr(e, 'data') and isinstance(e.data, dict) else str(e)
-        logger.error(f"Failed to fetch issues from GitHub: {message}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch issues from GitHub: {message}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error searching issues: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to find issues: {e}")
 
 @app.post("/api/explain/code", response_model=CodeExplanationResponse)
 async def explain_code(code: str = Form(...), context: str = Form("")):
