@@ -22,9 +22,21 @@ load_dotenv()
 app = FastAPI(title="Open-Source On-Ramp API", version="4.0.0")
 
 # --- CORS Configuration ---
+_default_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:3001",
+    "https://open-source-code-navigator.vercel.app",
+]
+_extra_origins = [
+    o.strip()
+    for o in os.getenv("ALLOWED_ORIGINS", "").split(",")
+    if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:3001"],
+    allow_origins=_default_origins + _extra_origins,
+    allow_origin_regex=r"https://open-source-code-navigator(-[a-z0-9-]+)?\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
