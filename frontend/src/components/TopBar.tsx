@@ -23,6 +23,14 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
     title: 'Welcome back',
     subtitle: 'Pick up where you left off, or kick off a new exploration.',
   },
+  '/login': {
+    title: 'Sign in',
+    subtitle: 'Welcome back — continue where you left off.',
+  },
+  '/signup': {
+    title: 'Create account',
+    subtitle: 'Get set up in under a minute.',
+  },
   '/explore': {
     title: 'Explore a repository',
     subtitle: 'Clone, browse, and read any public GitHub project.',

@@ -4,6 +4,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import {
   Box,
   CssBaseline,
+  CircularProgress,
   useMediaQuery,
   Theme,
 } from '@mui/material';
@@ -19,6 +20,9 @@ import ChatPage from './components/pages/ChatPage';
 import GuidedContribution from './components/GuidedContribution';
 import { AppDataProvider, useAppData } from './context/AppDataContext';
 import { User } from './types';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import LoginPage from './components/pages/LoginPage';
+import SignupPage from './components/pages/SignupPage';
 
 import './App.css';
 
@@ -28,6 +32,26 @@ const DEFAULT_USER: User = {
   email: '',
   picture: '',
 };
+
+const LoadingScreen: React.FC = () => (
+  <Box
+    sx={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}
+  >
+    <CircularProgress />
+  </Box>
+);
+
+function RequireAuth({ children }: { children: React.ReactElement }) {
+  const { user, authLoading } = useAuth();
+  if (authLoading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
 
 const AuthedShell: React.FC<{ user: User }> = ({ user }) => {
   const isLargeScreen = useMediaQuery((t: Theme) => t.breakpoints.up('lg'));
@@ -78,11 +102,50 @@ const AuthedShell: React.FC<{ user: User }> = ({ user }) => {
           }}
         >
           <Routes>
-            <Route path="/" element={<HomePage user={user} />} />
-            <Route path="/explore" element={<ExplorePage user={user} />} />
-            <Route path="/issues" element={<IssuesPage />} />
-            <Route path="/analyze" element={<AnalyzePage />} />
-            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
+
+            <Route
+              path="/"
+              element={
+                <RequireAuth>
+                  <HomePage user={user} />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/explore"
+              element={
+                <RequireAuth>
+                  <ExplorePage user={user} />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/issues"
+              element={
+                <RequireAuth>
+                  <IssuesPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/analyze"
+              element={
+                <RequireAuth>
+                  <AnalyzePage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/chat"
+              element={
+                <RequireAuth>
+                  <ChatPage />
+                </RequireAuth>
+              }
+            />
+
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Box>
@@ -102,13 +165,21 @@ const AuthedShell: React.FC<{ user: User }> = ({ user }) => {
   );
 };
 
+const AppWithAuth: React.FC = () => {
+  const { user, authLoading } = useAuth();
+  if (authLoading) return <LoadingScreen />;
+  return <AuthedShell user={user ?? DEFAULT_USER} />;
+};
+
 export default function App() {
   return (
     <ThemeProvider theme={appTheme}>
       <CssBaseline />
-      <AppDataProvider>
-        <AuthedShell user={DEFAULT_USER} />
-      </AppDataProvider>
+      <AuthProvider>
+        <AppDataProvider>
+          <AppWithAuth />
+        </AppDataProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }
