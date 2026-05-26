@@ -8,7 +8,9 @@ import React, {
 } from "react";
 import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
   onAuthStateChanged,
+  signInWithPopup,
   signInWithEmailAndPassword,
   signOut,
   User as FirebaseUser,
@@ -22,6 +24,7 @@ type AuthContextValue = {
   authLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string) => Promise<void>;
+  googleLogin: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -58,6 +61,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await createUserWithEmailAndPassword(auth, email, password);
   }, []);
 
+  const googleLogin = useCallback(async () => {
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+  }, []);
+
   const logout = useCallback(async () => {
     await signOut(auth);
   }, []);
@@ -68,9 +76,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       authLoading,
       login,
       signup,
+      googleLogin,
       logout,
     }),
-    [user, authLoading, login, signup, logout]
+    [user, authLoading, login, signup, googleLogin, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -16,11 +16,12 @@ import { useAuth } from "../../context/AuthContext";
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, login } = useAuth();
+  const { user, login, googleLogin } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [error, setError] = useState<string>("");
 
   const isEmailLikelyValid = useMemo(() => email.trim().includes("@"), [email]);
@@ -39,6 +40,20 @@ const LoginPage: React.FC = () => {
       setError(msg);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const onGoogle = async () => {
+    setError("");
+    setGoogleSubmitting(true);
+    try {
+      await googleLogin();
+      navigate("/");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Google sign-in failed.";
+      setError(msg);
+    } finally {
+      setGoogleSubmitting(false);
     }
   };
 
@@ -122,6 +137,21 @@ const LoginPage: React.FC = () => {
               </Button>
             </Stack>
           </Box>
+
+          <Button
+            type="button"
+            variant="outlined"
+            onClick={onGoogle}
+            disabled={googleSubmitting}
+            fullWidth
+            sx={{ mt: 1 }}
+          >
+            {googleSubmitting ? (
+              <CircularProgress size={22} sx={{ color: brand.primary }} />
+            ) : (
+              "Sign in with Google"
+            )}
+          </Button>
 
           <Stack
             direction="row"
