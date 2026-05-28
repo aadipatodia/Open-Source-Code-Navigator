@@ -130,7 +130,7 @@ const HomePage: React.FC<HomePageProps> = ({ user }) => {
         <HighlightCard
           icon={<BoltRounded />}
           title="No setup required"
-          body="No login, no tokens. Just open the app and start exploring."
+          body="No tokens. Just open the app and start exploring."
           accent={brand.primary}
         />
         <HighlightCard
