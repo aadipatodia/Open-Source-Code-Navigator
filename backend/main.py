@@ -504,10 +504,8 @@ async def audit_request_response(request: Request, call_next):
         raise
 
 
-@app.post("/api/analyze/repo", response_model=RepoAnalysisResponse)
-async def analyze_repo(request: AnalyzeRepoRequest, http_request: Optional[Request] = None):
+async def _analyze_repo_impl(request: AnalyzeRepoRequest, request_id: Optional[str] = None):
     async with ANALYZE_REPO_SEMAPHORE:
-        request_id = getattr(http_request.state, "request_id", None) if http_request else None
         repo_url = request.repoUrl
         log_event("user_action", request_id=request_id, action="analyze_repo", repo_url=repo_url)
         logger.debug(f"Received analyze request for: {repo_url}")
@@ -550,7 +548,13 @@ async def analyze_repo(request: AnalyzeRepoRequest, http_request: Optional[Reque
             logger.error(f"Failed during repo analysis {repo_url}: {e}")
             shutil.rmtree(temp_dir, onerror=handle_remove_readonly)
             raise HTTPException(status_code=500, detail=f"Failed to analyze repository: {e}")
-    
+
+
+@app.post("/api/analyze/repo", response_model=RepoAnalysisResponse)
+async def analyze_repo(request: AnalyzeRepoRequest, http_request: Request):
+    request_id = getattr(http_request.state, "request_id", None)
+    return await _analyze_repo_impl(request, request_id=request_id)
+
 @app.get("/tools")
 async def get_tools():
     try:
@@ -653,7 +657,7 @@ async def get_contribution_guide(request: GuidedContributionRequest):
         if request.repoUrl not in repo_cache:
             logger.debug(f"Repository {request.repoUrl} not in cache, analyzing...")
             analyze_request = AnalyzeRepoRequest(repoUrl=request.repoUrl)
-            await analyze_repo(analyze_request)
+            await _analyze_repo_impl(analyze_request)
 
     
         analysis = repo_cache[request.repoUrl]['analysis']
