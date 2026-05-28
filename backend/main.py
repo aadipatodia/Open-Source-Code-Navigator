@@ -1,22 +1,26 @@
-from fastapi import FastAPI, HTTPException, Form, Query
+from fastapi import FastAPI, HTTPException, Form, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List
 import os
+import asyncio
 from dotenv import load_dotenv
 import logging
 import tempfile
 import shutil
 import stat
 from pydantic import BaseModel
-from github import Github, GithubException
 import git
 import re
 import uvicorn
 import google.generativeai as genai
 import requests
+import json
+import time
+import uuid
 
 # --- Basic Configuration ---
-logging.basicConfig(level=logging.DEBUG)
+_log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(level=getattr(logging, _log_level, logging.INFO))
 logger = logging.getLogger(__name__)
 load_dotenv()
 
@@ -75,6 +79,29 @@ gemini_model = genai.GenerativeModel(
     generation_config=GEMINI_GENERATION_CONFIG,
 )
 
+# Expensive endpoints can otherwise stampede CPU/network when multiple windows
+# trigger requests at once.
+ANALYZE_REPO_SEMAPHORE = asyncio.Semaphore(int(os.getenv("ANALYZE_REPO_CONCURRENCY", "2")))
+GUIDE_SEMAPHORE = asyncio.Semaphore(int(os.getenv("GUIDE_CONCURRENCY", "3")))
+
+# Skip common heavy/generated/vendor directories while building repository trees.
+SKIP_TREE_DIRS = {
+    ".git",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".cache",
+    "dist",
+    "build",
+    ".next",
+    "target",
+    "vendor",
+    "coverage",
+}
+
 logger.info("Using anonymous GitHub client (no token required).")
 
 # --- Pydantic Models ---
@@ -128,18 +155,28 @@ class ChatRequest(BaseModel):
 repo_cache = {}
 
 # --- Utility Functions ---
+def log_event(event: str, **fields):
+    """Emit JSON structured logs for easy filtering/correlation."""
+    payload = {"event": event, **fields}
+    try:
+        logger.info(json.dumps(payload, default=str))
+    except Exception:
+        logger.info(f"{event} | {fields}")
+
+
+def _summarize_text(value: str, max_len: int = 280) -> str:
+    compact = re.sub(r"\s+", " ", (value or "")).strip()
+    if len(compact) <= max_len:
+        return compact
+    return compact[:max_len] + "...(truncated)"
+
+
 def handle_remove_readonly(func, path, exc_info):
     if not isinstance(exc_info[1], PermissionError):
         raise
     logger.debug(f"Fixing permissions for {path}")
     os.chmod(path, stat.S_IWRITE)
     func(path)
-
-def get_github_client() -> Github:
-    """GitHub client — uses GITHUB_TOKEN when set (recommended for production)."""
-    token = os.getenv("GITHUB_TOKEN", "").strip()
-    return Github(login_or_token=token) if token else Github()
-
 
 def _repo_name_from_api_url(repository_url: str) -> str:
     marker = "/repos/"
@@ -221,21 +258,99 @@ def search_github_issues(skills: str, *, limit: int = 15, timeout: int = 25) -> 
         for item in items[:limit]
     ]
 
-def generate_with_gemini(prompt: str, system_instruction: Optional[str] = None) -> str:
+def fetch_issue_body(repo_full_name: str, issue_number: int, *, timeout: int = 15) -> str:
+    """Fetch issue body with a single REST call and hard timeout (no long retries)."""
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = os.getenv("GITHUB_TOKEN", "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    url = f"https://api.github.com/repos/{repo_full_name}/issues/{issue_number}"
+    try:
+        response = requests.get(url, headers=headers, timeout=timeout)
+    except requests.Timeout as exc:
+        logger.error(f"GitHub issue fetch timed out after {timeout}s: {exc}")
+        raise HTTPException(
+            status_code=504,
+            detail="Timed out fetching issue details from GitHub.",
+        ) from exc
+    except requests.RequestException as exc:
+        logger.error(f"GitHub issue fetch request failed: {exc}")
+        raise HTTPException(
+            status_code=502,
+            detail="Could not reach GitHub to fetch issue details.",
+        ) from exc
+
+    if response.status_code == 403:
+        message = response.json().get("message", "GitHub API rate limit exceeded")
+        logger.error(f"GitHub issue fetch forbidden: {message}")
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"{message}. Configure GITHUB_TOKEN in backend env for higher limits "
+                "(https://github.com/settings/tokens)."
+            ),
+        )
+
+    if response.status_code >= 400:
+        message = response.json().get("message", response.text)
+        logger.error(f"GitHub issue fetch failed ({response.status_code}): {message}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not fetch issue details from GitHub: {message}",
+        )
+
+    body = response.json().get("body")
+    return body or "No description provided."
+
+def generate_with_gemini(
+    prompt: str,
+    system_instruction: Optional[str] = None,
+    *,
+    request_id: Optional[str] = None,
+    interaction_name: str = "unknown_interaction",
+) -> str:
     """Send a prompt to Gemini 2.5 Flash and return the generated text.
 
     A `system_instruction` can be provided to set a persistent role for the model
     on a per-call basis; otherwise the default model configuration is used.
     """
+    structured_reasoning_instruction = (
+        "Before your final answer, provide a short machine-readable reasoning block for server logs.\n"
+        "Output EXACTLY in this format:\n"
+        "<reasoning_json>{\"decision\":\"...\",\"why\":\"...\",\"assumptions\":[\"...\"],\"confidence\":\"low|medium|high\"}</reasoning_json>\n"
+        "<final_answer>...your normal answer...</final_answer>\n"
+        "Rules:\n"
+        "- Keep `why` brief and concrete (1-2 sentences, no hidden chain-of-thought).\n"
+        "- `assumptions` should contain at most 3 concise bullets.\n"
+        "- Keep `final_answer` fully compliant with user formatting instructions."
+    )
+    merged_system_instruction = (
+        f"{system_instruction}\n\n{structured_reasoning_instruction}"
+        if system_instruction
+        else structured_reasoning_instruction
+    )
+
     try:
+        start_ts = time.perf_counter()
         model = (
             genai.GenerativeModel(
                 model_name=GEMINI_MODEL,
                 generation_config=GEMINI_GENERATION_CONFIG,
-                system_instruction=system_instruction,
+                system_instruction=merged_system_instruction,
             )
-            if system_instruction
+            if merged_system_instruction
             else gemini_model
+        )
+        log_event(
+            "gemini_request_started",
+            request_id=request_id,
+            interaction=interaction_name,
+            model=GEMINI_MODEL,
+            prompt_preview=_summarize_text(prompt),
         )
         response = model.generate_content(prompt)
 
@@ -258,7 +373,42 @@ def generate_with_gemini(prompt: str, system_instruction: Optional[str] = None) 
                 status_code=502,
                 detail=f"Gemini returned an empty response (block_reason={block_reason}).",
             )
-        return text.strip()
+        full_text = text.strip()
+        reasoning_match = re.search(
+            r"<reasoning_json>\s*(\{.*?\})\s*</reasoning_json>",
+            full_text,
+            flags=re.DOTALL,
+        )
+        final_answer_match = re.search(
+            r"<final_answer>\s*(.*?)\s*</final_answer>",
+            full_text,
+            flags=re.DOTALL,
+        )
+
+        reasoning_payload = {}
+        if reasoning_match:
+            try:
+                reasoning_payload = json.loads(reasoning_match.group(1))
+            except json.JSONDecodeError:
+                reasoning_payload = {
+                    "parse_error": "invalid_reasoning_json",
+                    "raw_preview": _summarize_text(reasoning_match.group(1)),
+                }
+        else:
+            reasoning_payload = {"missing_reasoning_json": True}
+
+        final_answer = final_answer_match.group(1).strip() if final_answer_match else full_text
+        elapsed_ms = int((time.perf_counter() - start_ts) * 1000)
+        log_event(
+            "gemini_request_completed",
+            request_id=request_id,
+            interaction=interaction_name,
+            model=GEMINI_MODEL,
+            duration_ms=elapsed_ms,
+            reasoning=reasoning_payload,
+            answer_preview=_summarize_text(final_answer),
+        )
+        return final_answer
     except HTTPException:
         raise
     except Exception as e:
@@ -274,7 +424,7 @@ def build_file_tree(root_dir: str, start_dir: str, max_depth=4, depth=0) -> List
     items = []
     try:
         for item_name in os.listdir(root_dir):
-            if item_name == '.git':
+            if item_name in SKIP_TREE_DIRS:
                 continue
             full_path = os.path.join(root_dir, item_name)
             # Paths should be relative to the actual start of the repo, not the parent temp dir
@@ -313,41 +463,93 @@ def format_file_tree_for_prompt(items: List[FileItem], indent: str = "") -> str:
     return tree_str
 
 # --- API Endpoints ---
-@app.post("/api/analyze/repo", response_model=RepoAnalysisResponse)
-async def analyze_repo(request: AnalyzeRepoRequest):
-    repo_url = request.repoUrl
-    logger.debug(f"Received analyze request for: {repo_url}")
-    if not re.match(r"https://github\.com/[\w\-]+/[\w\-\.]+", repo_url):
-        logger.error(f"Invalid GitHub repository URL format: {repo_url}")
-        raise HTTPException(status_code=400, detail="Invalid GitHub repository URL format.")
+@app.middleware("http")
+async def audit_request_response(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    request.state.request_id = request_id
+    started = time.perf_counter()
+    query_keys = sorted(list(request.query_params.keys()))
+    log_event(
+        "request_received",
+        request_id=request_id,
+        method=request.method,
+        path=request.url.path,
+        query_keys=query_keys,
+        client_ip=request.client.host if request.client else "unknown",
+    )
 
-    if repo_url in repo_cache:
-        logger.info(f"Using cached repository from {repo_cache[repo_url]['path']}")
-        return repo_cache[repo_url]['analysis']
-
-    temp_dir = tempfile.mkdtemp()
-    logger.info(f"Cloning {repo_url} into {temp_dir}...")
     try:
-        # The git clone command places the repository's contents directly into the temp_dir
-        git.Repo.clone_from(repo_url, temp_dir, depth=1)
-        logger.debug(f"Repository raw clone to {temp_dir}")
-        
-        repo_root_path = temp_dir
-        repo_name = repo_url.split('/')[-1].replace('.git', '')
-        logger.debug(f"Identified repo_root_path: {repo_root_path}")
+        response = await call_next(request)
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        log_event(
+            "request_completed",
+            request_id=request_id,
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            duration_ms=elapsed_ms,
+        )
+        response.headers["x-request-id"] = request_id
+        return response
+    except Exception as exc:
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        log_event(
+            "request_failed",
+            request_id=request_id,
+            method=request.method,
+            path=request.url.path,
+            duration_ms=elapsed_ms,
+            error=str(exc),
+        )
+        raise
 
-        file_structure = build_file_tree(repo_root_path, start_dir=repo_root_path)
-        logger.debug(f"File structure generated with {len(file_structure)} items")
 
-        analysis_result = {"name": repo_name, "url": repo_url, "structure": file_structure}
-        repo_cache[repo_url] = {"path": repo_root_path, "analysis": analysis_result}
-        
-        logger.info(f"Repository analysis completed for {repo_url}")
-        return analysis_result
-    except Exception as e:
-        logger.error(f"Failed during repo analysis {repo_url}: {e}")
-        shutil.rmtree(temp_dir, onerror=handle_remove_readonly)
-        raise HTTPException(status_code=500, detail=f"Failed to analyze repository: {e}")
+@app.post("/api/analyze/repo", response_model=RepoAnalysisResponse)
+async def analyze_repo(request: AnalyzeRepoRequest, http_request: Optional[Request] = None):
+    async with ANALYZE_REPO_SEMAPHORE:
+        request_id = getattr(http_request.state, "request_id", None) if http_request else None
+        repo_url = request.repoUrl
+        log_event("user_action", request_id=request_id, action="analyze_repo", repo_url=repo_url)
+        logger.debug(f"Received analyze request for: {repo_url}")
+        if not re.match(r"https://github\.com/[\w\-]+/[\w\-\.]+", repo_url):
+            logger.error(f"Invalid GitHub repository URL format: {repo_url}")
+            raise HTTPException(status_code=400, detail="Invalid GitHub repository URL format.")
+
+        if repo_url in repo_cache:
+            log_event("app_response", request_id=request_id, action="analyze_repo", result="cache_hit")
+            logger.info(f"Using cached repository from {repo_cache[repo_url]['path']}")
+            return repo_cache[repo_url]['analysis']
+
+        temp_dir = tempfile.mkdtemp()
+        logger.info(f"Cloning {repo_url} into {temp_dir}...")
+        try:
+            # The git clone command places the repository's contents directly into the temp_dir
+            git.Repo.clone_from(repo_url, temp_dir, depth=1)
+            logger.debug(f"Repository raw clone to {temp_dir}")
+            
+            repo_root_path = temp_dir
+            repo_name = repo_url.split('/')[-1].replace('.git', '')
+            logger.debug(f"Identified repo_root_path: {repo_root_path}")
+
+            file_structure = build_file_tree(repo_root_path, start_dir=repo_root_path)
+            logger.debug(f"File structure generated with {len(file_structure)} items")
+
+            analysis_result = {"name": repo_name, "url": repo_url, "structure": file_structure}
+            repo_cache[repo_url] = {"path": repo_root_path, "analysis": analysis_result}
+            
+            log_event(
+                "app_response",
+                request_id=request_id,
+                action="analyze_repo",
+                result="success",
+                top_level_items=len(file_structure),
+            )
+            logger.info(f"Repository analysis completed for {repo_url}")
+            return analysis_result
+        except Exception as e:
+            logger.error(f"Failed during repo analysis {repo_url}: {e}")
+            shutil.rmtree(temp_dir, onerror=handle_remove_readonly)
+            raise HTTPException(status_code=500, detail=f"Failed to analyze repository: {e}")
     
 @app.get("/tools")
 async def get_tools():
@@ -365,7 +567,15 @@ async def cleanup():
     repo_cache.clear()
     
 @app.post("/api/summarize-code")
-async def summarize_code(code: str = Form(...), context: str = Form("")):
+async def summarize_code(request: Request, code: str = Form(...), context: str = Form("")):
+    request_id = getattr(request.state, "request_id", None)
+    log_event(
+        "user_action",
+        request_id=request_id,
+        action="summarize_code",
+        code_size=len(code or ""),
+        has_context=bool((context or "").strip()),
+    )
     logger.debug("Summarizing code snippet")
 
     system_instruction = (
@@ -401,46 +611,53 @@ Code:
 {code}
 ```"""
 
-    summary = generate_with_gemini(prompt, system_instruction=system_instruction)
+    summary = generate_with_gemini(
+        prompt,
+        system_instruction=system_instruction,
+        request_id=request_id,
+        interaction_name="summarize_code",
+    )
+    log_event("app_response", request_id=request_id, action="summarize_code", result="success")
     logger.debug("Code summary generated")
     return {"summary": summary}
 
 @app.post("/api/contribute/guide", response_model=GuidedContributionResponse)
 async def get_contribution_guide(request: GuidedContributionRequest):
-    logger.debug(f"Generating contribution guide for issue: {request.issueTitle}")
-    g = get_github_client()
-    repo_name_match = re.search(r"github\.com/([\w\-]+/[\w\-]+)", request.repoUrl)
-    issue_number_match = re.search(r"/issues/(\d+)", request.issueUrl)
+    async with GUIDE_SEMAPHORE:
+        request_id = None
+        log_event(
+            "user_action",
+            action="contribution_guide",
+            repo_url=request.repoUrl,
+            issue_url=request.issueUrl,
+            issue_title_preview=_summarize_text(request.issueTitle, 120),
+        )
+        logger.debug(f"Generating contribution guide for issue: {request.issueTitle}")
+        repo_name_match = re.search(r"github\.com/([\w\-]+/[\w\-]+)", request.repoUrl)
+        issue_number_match = re.search(r"/issues/(\d+)", request.issueUrl)
 
-    if not repo_name_match or not issue_number_match:
-        logger.error(f"Invalid repository or issue URL: {request.repoUrl}, {request.issueUrl}")
-        raise HTTPException(status_code=400, detail="Invalid repository or issue URL.")
+        if not repo_name_match or not issue_number_match:
+            logger.error(f"Invalid repository or issue URL: {request.repoUrl}, {request.issueUrl}")
+            raise HTTPException(status_code=400, detail="Invalid repository or issue URL.")
 
-    repo_full_name = repo_name_match.group(1)
-    issue_number = int(issue_number_match.group(1))
+        repo_full_name = repo_name_match.group(1)
+        issue_number = int(issue_number_match.group(1))
 
-    # If the caller already passed an issueBody, trust it; otherwise fetch via the
-    # GitHub API (anonymous calls are fine for public repos, subject to rate limits).
-    issue_body = (request.issueBody or "").strip()
-    if not issue_body:
-        try:
-            repo = g.get_repo(repo_full_name)
-            issue = repo.get_issue(number=issue_number)
-            issue_body = issue.body or "No description provided."
+        # If caller already passed issueBody, trust it; otherwise fetch via one
+        # direct REST call with hard timeout and clear rate-limit errors.
+        issue_body = (request.issueBody or "").strip()
+        if not issue_body:
+            issue_body = fetch_issue_body(repo_full_name, issue_number)
             logger.debug(f"Fetched issue {issue_number} from {repo_full_name}")
-        except GithubException as e:
-            message = e.data.get('message') if hasattr(e, 'data') and isinstance(e.data, dict) else str(e)
-            logger.error(f"GitHub API error: {message}")
-            raise HTTPException(status_code=404, detail=f"Could not fetch issue details from GitHub: {message}")
 
-    if request.repoUrl not in repo_cache:
-        logger.debug(f"Repository {request.repoUrl} not in cache, analyzing...")
-        analyze_request = AnalyzeRepoRequest(repoUrl=request.repoUrl)
-        await analyze_repo(analyze_request)
+        if request.repoUrl not in repo_cache:
+            logger.debug(f"Repository {request.repoUrl} not in cache, analyzing...")
+            analyze_request = AnalyzeRepoRequest(repoUrl=request.repoUrl)
+            await analyze_repo(analyze_request)
 
     
-    analysis = repo_cache[request.repoUrl]['analysis']
-    file_tree_string = format_file_tree_for_prompt(analysis['structure'])
+        analysis = repo_cache[request.repoUrl]['analysis']
+        file_tree_string = format_file_tree_for_prompt(analysis['structure'])
 
     # --- Contribution guide prompt ---
     system_instruction = (
@@ -523,7 +740,12 @@ Aim for a plan that a motivated beginner can follow without needing to ask follo
 Stay strictly within this format — the application parses it programmatically. Use Markdown freely INSIDE each section, but do not rename or skip section headings."""
 
     logger.info(f"Generating contribution guide for issue: {request.issueTitle}")
-    ai_response = generate_with_gemini(prompt, system_instruction=system_instruction)
+    ai_response = generate_with_gemini(
+        prompt,
+        system_instruction=system_instruction,
+        request_id=request_id,
+        interaction_name="contribution_guide",
+    )
     
     plan = []
     # Use a more robust regex to handle variations in the AI's output
@@ -541,15 +763,23 @@ Stay strictly within this format — the application parses it programmatically.
         plan.append(ContributionStep(step=1, title="AI Response", details=ai_response))
 
     logger.debug(f"Contribution guide generated with {len(plan)} steps")
+    log_event("app_response", action="contribution_guide", result="success", parsed_steps=len(plan))
     return GuidedContributionResponse(plan=plan)
 
 
 @app.post("/api/chat")
-async def chat_with_ai(request: ChatRequest):
+async def chat_with_ai(request: ChatRequest, http_request: Request):
     """
     Handles a chat message, sending it to the AI for a response.
     """
+    request_id = getattr(http_request.state, "request_id", None)
     logger.debug(f"Received chat message: {request.message}")
+    log_event(
+        "user_action",
+        request_id=request_id,
+        action="chat_with_ai",
+        message_preview=_summarize_text(request.message),
+    )
 
     system_instruction = (
         "You are 'Code Navigator', an AI pair-programmer that helps developers explore "
@@ -566,7 +796,13 @@ async def chat_with_ai(request: ChatRequest):
     prompt = f"User question:\n{request.message.strip()}\n\nAnswer:"
 
     try:
-        ai_response = generate_with_gemini(prompt, system_instruction=system_instruction)
+        ai_response = generate_with_gemini(
+            prompt,
+            system_instruction=system_instruction,
+            request_id=request_id,
+            interaction_name="chat_with_ai",
+        )
+        log_event("app_response", request_id=request_id, action="chat_with_ai", result="success")
         logger.debug("AI response generated successfully.")
         return {"response": ai_response}
     except HTTPException as e:
@@ -578,6 +814,12 @@ async def chat_with_ai(request: ChatRequest):
 
 @app.get("/api/repo/file_content")
 async def get_file_content(repo_url: str = Query(...), file_path: str = Query(...)):
+    log_event(
+        "user_action",
+        action="get_file_content",
+        repo_url=repo_url,
+        file_path=file_path,
+    )
     logger.debug(f"Fetching file content for {repo_url}, path: {file_path}")
     if repo_url not in repo_cache:
         logger.error(f"Repository {repo_url} not found in cache")
@@ -598,6 +840,12 @@ async def get_file_content(repo_url: str = Query(...), file_path: str = Query(..
     try:
         with open(full_file_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
+        log_event(
+            "app_response",
+            action="get_file_content",
+            result="success",
+            content_length=len(content),
+        )
         logger.debug(f"Successfully read file content from {full_file_path}")
         return {"content": content}
     except Exception as e:
@@ -606,9 +854,15 @@ async def get_file_content(repo_url: str = Query(...), file_path: str = Query(..
 
 @app.post("/api/issues/find", response_model=List[Issue])
 async def find_issues(request: FindIssuesRequest):
+    log_event(
+        "user_action",
+        action="find_issues",
+        skills_preview=_summarize_text(request.skills, 180),
+    )
     logger.debug(f"Searching issues with skills: {request.skills}")
     try:
         results = search_github_issues(request.skills)
+        log_event("app_response", action="find_issues", result="success", count=len(results))
         logger.info(f"Found {len(results)} issues for skills: {request.skills}")
         return results
     except HTTPException:
@@ -618,7 +872,15 @@ async def find_issues(request: FindIssuesRequest):
         raise HTTPException(status_code=500, detail=f"Failed to find issues: {e}")
 
 @app.post("/api/explain/code", response_model=CodeExplanationResponse)
-async def explain_code(code: str = Form(...), context: str = Form("")):
+async def explain_code(request: Request, code: str = Form(...), context: str = Form("")):
+    request_id = getattr(request.state, "request_id", None)
+    log_event(
+        "user_action",
+        request_id=request_id,
+        action="explain_code",
+        code_size=len(code or ""),
+        has_context=bool((context or "").strip()),
+    )
     logger.debug("Analyzing and explaining code snippet")
 
     system_instruction = (
@@ -663,7 +925,12 @@ Code:
 ```"""
 
     try:
-        ai_response_str = generate_with_gemini(prompt, system_instruction=system_instruction)
+        ai_response_str = generate_with_gemini(
+            prompt,
+            system_instruction=system_instruction,
+            request_id=request_id,
+            interaction_name="explain_code",
+        )
 
         corrected_code = None
         explanation = ai_response_str
@@ -680,6 +947,14 @@ Code:
             corrected_code = raw_corrected.strip()
 
         logger.debug("Code explanation generated")
+        log_event(
+            "app_response",
+            request_id=request_id,
+            action="explain_code",
+            result="success",
+            is_correct=is_correct,
+            has_corrected_code=bool(corrected_code),
+        )
         return CodeExplanationResponse(
             is_correct=is_correct,
             explanation=explanation,
