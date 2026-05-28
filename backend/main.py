@@ -49,7 +49,7 @@ app.add_middleware(
 
 # --- Environment & API Configuration ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 
 if not GEMINI_API_KEY:
     logger.error("FATAL: GEMINI_API_KEY (or GOOGLE_API_KEY) not found in .env file. AI features will not work.")
