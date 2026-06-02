@@ -63,9 +63,12 @@ interface AppDataContextValue {
   contributionPlan: ContributionStep[] | null;
   guideLoading: boolean;
   guideError: string;
+  guideMode: 'issue' | 'repo' | null;
   selectedIssueForGuide: Issue | null;
+  guideRepoLabel: string;
   isGuideOpen: boolean;
   openGuideForIssue: (issue: Issue) => Promise<void>;
+  openGuideForRepo: (url: string) => Promise<void>;
   closeGuide: () => void;
 
   // Chat
@@ -105,7 +108,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
   const [contributionPlan, setContributionPlan] = useState<ContributionStep[] | null>(null);
   const [guideLoading, setGuideLoading] = useState(false);
   const [guideError, setGuideError] = useState('');
+  const [guideMode, setGuideMode] = useState<'issue' | 'repo' | null>(null);
   const [selectedIssueForGuide, setSelectedIssueForGuide] = useState<Issue | null>(null);
+  const [guideRepoLabel, setGuideRepoLabel] = useState('');
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   // Chat state
@@ -169,6 +174,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const openGuideForIssue = useCallback(async (issue: Issue) => {
     setSelectedIssueForGuide(issue);
+    setGuideMode('issue');
+    setGuideRepoLabel('');
     setIsGuideOpen(true);
     setGuideLoading(true);
     setGuideError('');
@@ -184,6 +191,25 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
       setContributionPlan(res.data.plan);
     } catch (err: unknown) {
       setGuideError(getApiError(err, 'Failed to generate contribution guide.'));
+    } finally {
+      setGuideLoading(false);
+    }
+  }, []);
+
+  const openGuideForRepo = useCallback(async (url: string) => {
+    const label = url.replace(/^https?:\/\/(www\.)?github\.com\//, '');
+    setGuideMode('repo');
+    setSelectedIssueForGuide(null);
+    setGuideRepoLabel(label);
+    setIsGuideOpen(true);
+    setGuideLoading(true);
+    setGuideError('');
+    setContributionPlan(null);
+    try {
+      const res = await apiClient.post('/api/contribute/repo-guide', { repoUrl: url });
+      setContributionPlan(res.data.plan);
+    } catch (err: unknown) {
+      setGuideError(getApiError(err, 'Failed to generate repo contribution guide.'));
     } finally {
       setGuideLoading(false);
     }
@@ -259,9 +285,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
       contributionPlan,
       guideLoading,
       guideError,
+      guideMode,
       selectedIssueForGuide,
+      guideRepoLabel,
       isGuideOpen,
       openGuideForIssue,
+      openGuideForRepo,
       closeGuide,
       chatMessages,
       chatLoading,
@@ -287,9 +316,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
       contributionPlan,
       guideLoading,
       guideError,
+      guideMode,
       selectedIssueForGuide,
+      guideRepoLabel,
       isGuideOpen,
       openGuideForIssue,
+      openGuideForRepo,
       closeGuide,
       chatMessages,
       chatLoading,

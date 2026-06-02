@@ -14,6 +14,7 @@ import {
   GitHub,
   RefreshRounded,
   FolderSpecialRounded,
+  AutoAwesomeRounded,
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
 
@@ -40,6 +41,8 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ user }) => {
     fileLoading,
     loadRepository,
     selectFile,
+    openGuideForRepo,
+    guideLoading,
   } = useAppData();
 
   const repoLabel = repoUrl
@@ -119,6 +122,15 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ user }) => {
               </Typography>
             </Box>
             <Stack direction="row" spacing={1}>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => repoUrl && openGuideForRepo(repoUrl)}
+                startIcon={<AutoAwesomeRounded />}
+                disabled={guideLoading}
+              >
+                How to Contribute
+              </Button>
               <Button
                 variant="outlined"
                 size="small"

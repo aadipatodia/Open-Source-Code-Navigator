@@ -62,7 +62,10 @@ const AuthedShell: React.FC<{ user: User }> = ({ user }) => {
     contributionPlan,
     guideLoading,
     guideError,
+    guideMode,
     selectedIssueForGuide,
+    guideRepoLabel,
+    repoUrl,
     closeGuide,
   } = useAppData();
 
@@ -157,9 +160,11 @@ const AuthedShell: React.FC<{ user: User }> = ({ user }) => {
         plan={contributionPlan}
         loading={guideLoading}
         error={guideError}
+        mode={guideMode}
         issueTitle={selectedIssueForGuide?.title || ''}
         issueUrl={selectedIssueForGuide?.url}
-        repoName={selectedIssueForGuide?.repoName}
+        repoName={guideMode === 'repo' ? guideRepoLabel : selectedIssueForGuide?.repoName}
+        repoUrl={guideMode === 'repo' ? repoUrl || undefined : undefined}
       />
     </Box>
   );

@@ -148,6 +148,9 @@ class ContributionStep(BaseModel):
 class GuidedContributionResponse(BaseModel):
     plan: List[ContributionStep]
     
+class RepoGuideRequest(BaseModel):
+    repoUrl: str
+
 class ChatRequest(BaseModel):
     message: str
 
@@ -769,6 +772,119 @@ Stay strictly within this format — the application parses it programmatically.
     logger.debug(f"Contribution guide generated with {len(plan)} steps")
     log_event("app_response", action="contribution_guide", result="success", parsed_steps=len(plan))
     return GuidedContributionResponse(plan=plan)
+
+
+@app.post("/api/contribute/repo-guide", response_model=GuidedContributionResponse)
+async def get_repo_contribution_guide(request: RepoGuideRequest):
+    """Generate a general 'How to contribute' guide for a repository (no issue required)."""
+    async with GUIDE_SEMAPHORE:
+        log_event(
+            "user_action",
+            action="repo_contribution_guide",
+            repo_url=request.repoUrl,
+        )
+        logger.debug(f"Generating repo contribution guide for: {request.repoUrl}")
+
+        repo_name_match = re.search(r"github\.com/([\w\-\.]+/[\w\-\.]+)", request.repoUrl)
+        if not repo_name_match:
+            raise HTTPException(status_code=400, detail="Invalid repository URL.")
+
+        repo_full_name = repo_name_match.group(1)
+
+        if request.repoUrl not in repo_cache:
+            logger.debug(f"Repository {request.repoUrl} not in cache, analyzing...")
+            analyze_request = AnalyzeRepoRequest(repoUrl=request.repoUrl)
+            await _analyze_repo_impl(analyze_request)
+
+        analysis = repo_cache[request.repoUrl]['analysis']
+        file_tree_string = format_file_tree_for_prompt(analysis['structure'])
+
+        system_instruction = (
+            "You are a senior open-source maintainer writing a welcoming, thorough onboarding guide "
+            "for a newcomer who wants to contribute to a project they have never seen before. "
+            "You write precise, file-aware instructions grounded in the repository's actual file tree. "
+            "When uncertain about a detail, say so explicitly."
+        )
+
+        prompt = f"""You will produce a DETAILED onboarding & contribution guide for the repository below.
+The reader has just browsed this repo for the first time and wants to know what it is and how to contribute.
+
+## Repository
+- URL: {request.repoUrl}
+- Name: {repo_full_name}
+
+## Repository file structure (partial)
+```
+{file_tree_string}
+```
+
+## Output rules (read carefully — the application parses this output)
+1. Use the EXACT section headings below, each on its own line, surrounded by `**`. The downstream parser depends on this format.
+2. Do not invent files that are not in the structure above; if unsure, say "likely located in …" and explain how to confirm.
+3. Prefer concrete, actionable instructions with exact commands, file paths, and function/class names.
+4. Use Markdown bullets, numbered lists, and fenced code blocks (with language tags) for commands and snippets.
+5. Be GENEROUS with detail — multi-paragraph sections are encouraged.
+6. Do NOT add sections beyond the ones listed; do NOT use Step 6+.
+
+## Required sections (in this order)
+
+**Step 1: About This Project**
+- What this project does, who it is for, and what problem it solves (infer from file tree, README presence, package files, etc.).
+- Identify the tech stack (languages, frameworks, key dependencies) from the file tree.
+- Describe the high-level architecture: how the directories map to subsystems (frontend, backend, config, tests, etc.).
+
+**Step 2: Local Setup & Running**
+- Exact fork + clone commands (`git` commands).
+- Install / bootstrap commands (e.g. `npm install`, `pip install -r requirements.txt`, `make setup`) — pick the right ones based on the file tree.
+- Environment variables or config files to create (look for `.env.example`, `config/`, etc.).
+- How to run the project locally (commands, URL/port if applicable).
+- Common gotchas a newcomer might hit during setup.
+
+**Step 3: Codebase Map**
+- Walk through the most important directories and files, explaining what each one does.
+- Identify the main entry point(s) (e.g. `main.py`, `index.ts`, `App.tsx`).
+- Describe the request / data flow in prose ("A request hits X, which calls Y, which reads from Z …").
+- Point out where tests, CI config, docs, and contribution guidelines live (if visible in the tree).
+
+**Step 4: Making Your First Contribution**
+- How to find beginner-friendly issues (labels like `good first issue`, `help wanted`; link to the repo's issue tracker).
+- Step-by-step workflow: create a branch, make a change, run tests, commit, push, open a PR.
+- Show a realistic example of a small change (e.g. fixing a typo, adding a test, updating docs) with a fenced code block.
+- Explain the project's PR conventions if inferable (PR template, linked issues, review process).
+
+**Step 5: Testing & Quality**
+- How to run the test suite (exact commands).
+- How to run linters, type checks, or formatters if visible in the file tree.
+- How to add or update a test: which directory, naming conventions, a minimal example.
+- Pre-commit hooks or CI checks contributors should be aware of.
+
+**Final Advice**
+- 4–6 substantive bullets: open a draft PR early, keep commits focused, read CONTRIBUTING.md, respond to review feedback, where to ask for help (Discussions, Discord, issue thread).
+
+Stay strictly within this format — the application parses it programmatically. Use Markdown freely INSIDE each section."""
+
+        ai_response = generate_with_gemini(
+            prompt,
+            system_instruction=system_instruction,
+            interaction_name="repo_contribution_guide",
+        )
+
+        plan = []
+        steps_raw = re.findall(r"\*\*Step \d+: (.+?)\*\*\n(.*?)(?=\n\*\*Step|\n\*\*Final|\Z)", ai_response, re.DOTALL)
+        for i, (title, details) in enumerate(steps_raw):
+            plan.append(ContributionStep(step=i + 1, title=title.strip(), details=details.strip()))
+
+        final_match = re.search(r"\*\*Final Advice\*\*\n(.*)", ai_response, re.DOTALL)
+        if final_match:
+            plan.append(ContributionStep(step=len(plan) + 1, title="Final Advice", details=final_match.group(1).strip()))
+
+        if not plan:
+            logger.warning("No structured steps parsed from AI response, using fallback.")
+            plan.append(ContributionStep(step=1, title="AI Response", details=ai_response))
+
+        logger.debug(f"Repo contribution guide generated with {len(plan)} steps")
+        log_event("app_response", action="repo_contribution_guide", result="success", parsed_steps=len(plan))
+        return GuidedContributionResponse(plan=plan)
 
 
 @app.post("/api/chat")

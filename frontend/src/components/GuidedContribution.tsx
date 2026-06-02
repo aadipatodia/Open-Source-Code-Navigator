@@ -37,9 +37,11 @@ interface GuidedContributionProps {
   plan: ContributionStep[] | null;
   loading: boolean;
   error: string;
+  mode: 'issue' | 'repo' | null;
   issueTitle: string;
   issueUrl?: string;
   repoName?: string;
+  repoUrl?: string;
 }
 
 const GuidedContribution: React.FC<GuidedContributionProps> = ({
@@ -48,10 +50,17 @@ const GuidedContribution: React.FC<GuidedContributionProps> = ({
   plan,
   loading,
   error,
+  mode,
   issueTitle,
   issueUrl,
   repoName,
+  repoUrl,
 }) => {
+  const isRepoMode = mode === 'repo';
+  const chipLabel = isRepoMode ? 'Repo Contribution Guide' : 'AI Contribution Plan';
+  const title = isRepoMode
+    ? `How to contribute to ${repoName || 'this repo'}`
+    : issueTitle || 'Generating plan…';
   return (
     <Modal
       open={open}
@@ -87,7 +96,7 @@ const GuidedContribution: React.FC<GuidedContributionProps> = ({
             <Box sx={{ minWidth: 0 }}>
               <Chip
                 icon={<AutoAwesomeRounded sx={{ fontSize: 14 }} />}
-                label="AI Contribution Plan"
+                label={chipLabel}
                 size="small"
                 sx={{
                   bgcolor: alpha(brand.secondary, 0.16),
@@ -107,7 +116,7 @@ const GuidedContribution: React.FC<GuidedContributionProps> = ({
                   pr: 2,
                 }}
               >
-                {issueTitle || 'Generating plan…'}
+                {title}
               </Typography>
               {repoName && (
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
@@ -123,18 +132,32 @@ const GuidedContribution: React.FC<GuidedContributionProps> = ({
             </IconButton>
           </Box>
 
-          {issueUrl && (
+          {(issueUrl || repoUrl) && (
             <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-              <Button
-                size="small"
-                variant="outlined"
-                href={issueUrl}
-                target="_blank"
-                rel="noreferrer"
-                startIcon={<LaunchRounded />}
-              >
-                Open issue on GitHub
-              </Button>
+              {issueUrl && !isRepoMode && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  href={issueUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  startIcon={<LaunchRounded />}
+                >
+                  Open issue on GitHub
+                </Button>
+              )}
+              {repoUrl && isRepoMode && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  href={repoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  startIcon={<LaunchRounded />}
+                >
+                  Open repo on GitHub
+                </Button>
+              )}
             </Stack>
           )}
         </Box>
@@ -161,10 +184,14 @@ const GuidedContribution: React.FC<GuidedContributionProps> = ({
             >
               <CircularProgress />
               <Typography sx={{ color: brand.textMuted, textAlign: 'center' }}>
-                Generating your personalized contribution plan…
+                {isRepoMode
+                  ? 'Generating your repo contribution guide…'
+                  : 'Generating your personalized contribution plan…'}
               </Typography>
               <Typography variant="caption" sx={{ color: brand.textSubtle, textAlign: 'center' }}>
-                This involves cloning the repo and asking AI for a step-by-step roadmap.
+                {isRepoMode
+                  ? 'Analyzing the repo structure and generating onboarding steps.'
+                  : 'This involves cloning the repo and asking AI for a step-by-step roadmap.'}
               </Typography>
             </Box>
           )}
