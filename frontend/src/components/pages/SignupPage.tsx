@@ -9,6 +9,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { PersonAddRounded } from "@mui/icons-material";
 import { Navigate, Link as RouterLink, useNavigate } from "react-router-dom";
 
 import { brand, brandGradient } from "../../theme/theme";
@@ -61,7 +62,7 @@ const SignupPage: React.FC = () => {
         }}
       >
         <Stack spacing={2.25}>
-          <Box>
+          <Box sx={{ textAlign: "center" }}>
             <Box
               sx={{
                 width: 56,
@@ -71,11 +72,11 @@ const SignupPage: React.FC = () => {
                 placeItems: "center",
                 background: brandGradient,
                 color: "#fff",
-                fontWeight: 800,
                 mb: 2,
+                mx: "auto",
               }}
             >
-              Sign up
+              <PersonAddRounded sx={{ fontSize: 28 }} />
             </Box>
             <Typography variant="h4" sx={{ fontWeight: 800, color: brand.text, mb: 0.5 }}>
               Create your account

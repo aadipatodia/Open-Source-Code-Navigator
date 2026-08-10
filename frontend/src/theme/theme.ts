@@ -124,6 +124,13 @@ export const appTheme = createTheme({
             background: `linear-gradient(135deg, ${brand.primaryHover} 0%, ${brand.secondary} 100%)`,
             boxShadow: `0 10px 36px ${alpha(brand.primary, 0.45)}`,
           },
+          // The gradient would otherwise stay at full strength and hide MUI's
+          // disabled styling, leaving an unreadable label on a bright button.
+          '&.Mui-disabled': {
+            background: alpha(brand.primary, 0.16),
+            color: brand.textSubtle,
+            boxShadow: 'none',
+          },
         },
         outlinedPrimary: {
           borderColor: alpha(brand.primary, 0.5),

@@ -9,6 +9,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { LoginRounded } from "@mui/icons-material";
 import { useNavigate, Navigate, Link as RouterLink } from "react-router-dom";
 
 import { brand, brandGradient } from "../../theme/theme";
@@ -76,7 +77,7 @@ const LoginPage: React.FC = () => {
         }}
       >
         <Stack spacing={2.25}>
-          <Box>
+          <Box sx={{ textAlign: "center" }}>
             <Box
               sx={{
                 width: 56,
@@ -86,11 +87,11 @@ const LoginPage: React.FC = () => {
                 placeItems: "center",
                 background: brandGradient,
                 color: "#fff",
-                fontWeight: 800,
                 mb: 2,
+                mx: "auto",
               }}
             >
-              Log in
+              <LoginRounded sx={{ fontSize: 28 }} />
             </Box>
             <Typography variant="h4" sx={{ fontWeight: 800, color: brand.text, mb: 0.5 }}>
               Welcome back

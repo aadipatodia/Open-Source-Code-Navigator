@@ -41,7 +41,9 @@ GENERATION_CONFIG = {
     "temperature": 0.4,
     "top_p": 0.95,
     "top_k": 40,
-    "max_output_tokens": 8192,
+    # Gemini 2.5 spends part of the output budget on thinking, so a plan this
+    # detailed needs more headroom than the visible text suggests.
+    "max_output_tokens": int(os.getenv("MAX_OUTPUT_TOKENS", "16384")),
 }
 
 GITHUB_API = "https://api.github.com"
@@ -283,7 +285,9 @@ def format_tree(items: List[FileItem], indent: str = "") -> str:
     lines = []
     for item in items:
         marker = "+-- " if item.type == "directory" else "|-- "
-        lines.append(f"{indent}{marker}{item.name}")
+        # Send the path, not the bare name: the model is asked to cite files by their
+        # full path, and it cannot do that reliably by counting indentation.
+        lines.append(f"{indent}{marker}{item.path}")
         if item.children:
             lines.append(format_tree(item.children, indent + "    "))
     return "\n".join(line for line in lines if line)
@@ -330,18 +334,25 @@ async def repo_tree_text(repo_url: str) -> str:
 # Contribution plans
 # --------------------------------------------------------------------------
 PLAN_SYSTEM_INSTRUCTION = (
-    "You are a senior open-source maintainer mentoring a first-time contributor. "
-    "You write thorough, file-aware plans using exact commands, real file paths, and named "
-    "functions rather than vague advice. You never invent files or APIs that are absent from "
-    "the provided repository structure — when unsure, you say so and explain how to confirm."
+    "You are a senior maintainer of the repository in front of you, writing the walkthrough "
+    "you wish someone had written for you on your first day. You explain how the system "
+    "actually works before you propose changing it, you reason from the evidence you were "
+    "given rather than from how projects like this usually look, and you write code that "
+    "could be pasted in and run. Vague advice is worse than none: you never tell a reader to "
+    "'look into', 'investigate', or 'figure out' something you could have reasoned out "
+    "yourself. Where the evidence genuinely does not settle a question, you commit to the "
+    "most likely answer, say why you believe it, and give the one command that confirms it."
 )
 
 PLAN_FORMAT_RULES = """## Output rules (the application parses this)
-1. Use the exact section headings below, each on its own line, wrapped in `**`.
-2. Do not invent files that are absent from the structure above. If unsure, write "likely located in ..." and explain how to confirm (e.g. `grep -R "symbol" .`).
-3. Prefer concrete instructions ("Open `src/foo.ts` and update `bar`") over vague advice.
-4. Use Markdown bullets, numbered lists, and fenced code blocks with language tags.
-5. Be generous with detail inside each section, but never rename, skip, or add sections."""
+1. Use the exact section headings below, each on its own line, wrapped in `**`. Never rename, reorder, skip, or add sections.
+2. Depth beats coverage. Explain how the relevant part of the system works today - the flow, the functions involved, the data that moves between them - before proposing any change. The reader should finish this understanding the subsystem, not just holding a checklist.
+3. Reason from the material above, not from convention. Name a file only if it appears in the structure, and use its full path from the repository root. If you are inferring that something exists or behaves a certain way, mark it as an assumption, state what it rests on, and give the single command that settles it.
+4. Never hand the research back. "Investigate X", "check the docs", "verify the exact API", and "update this based on the patterns you find" are all failures - they leave the reader exactly where they started. Take a position instead.
+5. Every code block must be complete and runnable as written: real imports, real symbol names, no `# implement this here` placeholders, no pseudocode, and matching the style visible in the project.
+6. Every verification step must name the observable result - the exact output, exit code, or on-screen change that means it worked - plus the most likely failure and what it would mean.
+7. The reader has the issue open already. Do not restate it; use the space to add what they cannot see for themselves.
+8. Use Markdown bullets, numbered lists, and fenced code blocks with language tags. Length is fine when it carries information; filler is not."""
 
 
 def parse_plan(response: str) -> List[ContributionStep]:
@@ -414,8 +425,13 @@ async def get_contribution_guide(request: GuidedContributionRequest):
     issue_body = request.issueBody.strip() or fetch_issue_body(repo_match.group(1), int(issue_match.group(1)))
     tree = await repo_tree_text(request.repoUrl)
 
-    prompt = f"""Write a detailed, end-to-end contribution plan for the GitHub issue below.
-Aim for a plan a motivated beginner can follow without asking follow-up questions.
+    prompt = f"""Write the contribution plan for the GitHub issue below.
+
+Work out how this repository is put together from the structure given, then explain it
+to the reader before you ask them to change anything. Assume they are a capable developer
+who has never seen this codebase: they should be able to go from this plan to a merged
+pull request without asking a single follow-up question, and without you sending them off
+to research anything you could have worked out for them.
 
 ## Issue
 - Repository: {request.repoUrl}
@@ -434,23 +450,26 @@ Aim for a plan a motivated beginner can follow without asking follow-up question
 
 ## Required sections, in this order
 
-**Step 1: Understand the Problem**
-Restate the issue in plain language, identify the affected user flow or subsystem, and give a 3-6 item "definition of done" checklist. Note anything a maintainer would need to clarify first.
+**Step 1: What This Issue Really Asks For**
+Translate the request into terms of this codebase: which subsystem owns the behaviour, and what the difference is between what the code does now and what the issue wants. Then give a 3-6 item definition of done, each item written as something that can be observed or run, not as an intention. Close with the decisions the issue leaves open - and your recommended answer to each, with the reasoning. Do not summarise the issue text.
 
-**Step 2: High-Level Roadmap**
-4-7 bullets in execution order. For each, name the files likely to change and the role each plays. List prerequisites (tooling versions, env vars, accounts) and call out risks, edge cases, and alternatives considered.
+**Step 2: How This Part of the Codebase Works Today**
+The heart of the plan. Walk the reader through the existing machinery they are about to touch: the entry point, the path a request or a call takes through the files, the functions that matter and what each one is responsible for, and the shape of the data being passed around. Name the conventions this project follows that the contributor must imitate - how modules are organised, how errors are handled, how configuration reaches the code. Where the structure above is not enough to be certain, say what you infer and from which files you infer it. Someone who reads only this section should be able to find their way around unaided.
 
-**Step 3: Detailed Implementation - First Action**
-Exact fork and clone commands, the install/bootstrap command implied by the file tree, how to run the project locally and reproduce the current behavior, and which file to open first.
+**Step 3: The Plan of Attack**
+4-7 bullets in execution order. Each names the file it touches, the change in one sentence, and why it comes at that point in the sequence. Then: what must be installed or configured before starting, which parts of this change are most likely to go wrong in this particular codebase and how you would know, and one alternative approach with the reason you did not choose it.
 
-**Step 4: Detailed Implementation - Next Steps**
-A numbered list of at least 4 follow-up actions. Give each one: **File** (exact path), **What to change**, **Why** (which acceptance criterion it advances), **Snippet** (fenced before/after or diff, marking assumptions), and **Verify**.
+**Step 4: Getting Set Up and Seeing the Problem**
+Fork and clone commands, then the install and run commands this project actually uses - deduce them from the files present and say which file told you. Give the reader a way to observe the current behaviour with their own eyes before changing anything, and say what they should see. Finish by naming the first file to open and what to read in it.
 
-**Step 5: Testing the Changes**
-Exact test, lint, and type-check commands based on the project's real tooling. Say which test file to add or update and which cases to cover (happy path, edge cases, a regression for this bug). Explain how to write the PR description linking the issue ("Fixes #N").
+**Step 5: Making the Change**
+A numbered list of at least four actions. For each: **File** (full path), **What to change**, **Why** (which item of the definition of done it satisfies), **Snippet** (complete before/after or diff, in the project's own style), and **Verify** (the command to run and the exact result that means it worked). Order them so the code is in a working state as often as possible.
+
+**Step 6: Proving It Works and Opening the PR**
+The project's real test, lint, and type-check commands, inferred from its tooling files. Which test file to add or extend, following the naming and layout convention visible in the structure. The specific cases to cover: the behaviour the issue asked for, the edge cases you identified in Step 3, and a regression test that fails without this change. Then the PR description itself - what to write so a maintainer can review it quickly, including the "Fixes #N" line.
 
 **Final Advice**
-4-6 bullets: open a draft PR early, keep commits focused, follow the contribution guide and code style, respond to review feedback, and where to ask for help."""
+4-6 bullets, each one specific to this project or this change rather than generic contribution etiquette: the review conventions this repository appears to follow, where its maintainers discuss work, which part of this change is most likely to draw review comments and how to pre-empt it, and how to split the work into commits that tell a story."""
 
     logger.info("Generating contribution guide for: %s", request.issueTitle)
     return GuidedContributionResponse(plan=parse_plan(generate(prompt, PLAN_SYSTEM_INSTRUCTION)))
@@ -465,8 +484,12 @@ async def get_repo_contribution_guide(request: RepoGuideRequest):
 
     tree = await repo_tree_text(request.repoUrl)
 
-    prompt = f"""Write a detailed onboarding and contribution guide for the repository below.
-The reader has just browsed this repo for the first time and wants to know what it is and how to contribute.
+    prompt = f"""Write the onboarding and contribution guide for the repository below.
+
+Work out how this repository is put together from the structure given. The reader has just
+opened it for the first time and wants to understand it well enough to contribute: they
+should come away knowing how the system fits together and where their first change belongs,
+not just holding a list of commands.
 
 ## Repository
 - URL: {request.repoUrl}
@@ -481,23 +504,23 @@ The reader has just browsed this repo for the first time and wants to know what 
 
 ## Required sections, in this order
 
-**Step 1: About This Project**
-What the project does, who it is for, and what problem it solves. Identify the tech stack and describe how the directories map to subsystems.
+**Step 1: What This Project Is**
+What it does, who runs it, and the problem it exists to solve. Identify the stack from the files present and say which files told you. Then the part a newcomer cannot get from the README: how this project is shaped, which directories are the substance and which are scaffolding, and what the architecture implies about how the team works.
 
-**Step 2: Local Setup & Running**
-Exact fork and clone commands, the install/bootstrap command implied by the file tree, config or env files to create, how to run it locally, and common setup gotchas.
+**Step 2: How the Code Fits Together**
+The heart of the guide. Name the entry point and trace one complete path through the system in prose - what handles a request or a command first, what it calls, where the data comes from, and what comes back. Explain what each significant directory is responsible for and how it talks to the others. Point out the conventions a contributor must follow to have their code look like it belongs, and the places where the structure suggests something surprising is happening.
 
-**Step 3: Codebase Map**
-Walk through the most important directories and files, name the entry points, describe the request/data flow in prose, and point out where tests, CI config, and docs live.
+**Step 3: Getting It Running**
+Fork and clone commands, then the install and run commands this project actually uses - deduce them from the files present and name the file each came from. Configuration and environment files to create, and what goes in them. What the reader should see once it is running. The two or three failures most likely on a fresh machine given this stack, and what each one means.
 
-**Step 4: Making Your First Contribution**
-How to find beginner-friendly issues, the branch-to-PR workflow step by step, a realistic example of a small change in a fenced code block, and any inferable PR conventions.
+**Step 4: Your First Contribution**
+Where this project's beginner-friendly work lives and how to recognise a good first issue here specifically. The branch-to-PR workflow step by step. Then a realistic worked example: pick a small change that would genuinely be useful in this repository, name the file, show the diff, and show how to verify it. Any PR and commit conventions the repository's own files imply.
 
-**Step 5: Testing & Quality**
-Exact commands to run tests, linters, type checks, and formatters visible in the tree. How to add a test (directory, naming convention, minimal example) and which CI checks or hooks to expect.
+**Step 5: Testing and Quality**
+The real test, lint, type-check, and format commands, inferred from the tooling files present. Where tests live, what the naming convention is, and a minimal example test written in this project's own style. Which checks run automatically on a PR and what a contributor should run locally first to avoid a red build.
 
 **Final Advice**
-4-6 bullets: open a draft PR early, keep commits focused, read CONTRIBUTING.md, respond to review feedback, and where to ask for help."""
+4-6 bullets specific to this project rather than generic contribution etiquette: where its maintainers talk, what this codebase's reviewers are likely to be picky about, which areas are safe for a newcomer and which are load-bearing, and the fastest way to build real familiarity with it."""
 
     logger.info("Generating repo contribution guide for: %s", request.repoUrl)
     return GuidedContributionResponse(plan=parse_plan(generate(prompt, PLAN_SYSTEM_INSTRUCTION)))
