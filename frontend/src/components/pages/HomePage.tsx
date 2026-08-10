@@ -24,7 +24,8 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import { brand, brandGradient } from '../../theme/theme';
 import { useAppData } from '../../context/AppDataContext';
-import { User } from '../../types';
+import { useAuth } from '../../context/AuthContext';
+import IconTile from '../common/IconTile';
 
 const quickActions = [
   {
@@ -57,14 +58,11 @@ const quickActions = [
   },
 ];
 
-interface HomePageProps {
-  user: User;
-}
-
-const HomePage: React.FC<HomePageProps> = ({ user }) => {
+const HomePage: React.FC = () => {
   const { recentAnalyses } = useAppData();
+  const { user } = useAuth();
 
-  const firstName = (user.name || 'Coder').split(' ')[0];
+  const firstName = (user?.name || 'Coder').split(' ')[0];
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -196,19 +194,10 @@ const HomePage: React.FC<HomePageProps> = ({ user }) => {
                 },
               }}
             >
-              <Box
-                sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 2,
-                  display: 'grid',
-                  placeItems: 'center',
-                  background: alpha(a.accent, 0.15),
-                  color: a.accent,
-                  mb: 0.5,
-                }}
-              >
-                {a.icon}
+              <Box sx={{ mb: 0.5 }}>
+                <IconTile color={a.accent} tint={0.15}>
+                  {a.icon}
+                </IconTile>
               </Box>
               <Typography variant="h6" sx={{ color: brand.text, fontWeight: 700 }}>
                 {a.title}
@@ -340,19 +329,7 @@ const HighlightCard: React.FC<{
       },
     }}
   >
-    <Box
-      sx={{
-        width: 40,
-        height: 40,
-        borderRadius: 2,
-        display: 'grid',
-        placeItems: 'center',
-        background: alpha(accent, 0.16),
-        color: accent,
-      }}
-    >
-      {icon}
-    </Box>
+    <IconTile color={accent}>{icon}</IconTile>
     <Typography variant="h6" sx={{ color: brand.text, fontWeight: 700 }}>
       {title}
     </Typography>

@@ -24,12 +24,7 @@ import { alpha } from '@mui/material/styles';
 
 import { brand, brandGradient } from '../theme/theme';
 import MarkdownRenderer from './common/MarkdownRenderer';
-
-interface ContributionStep {
-  step: number;
-  title: string;
-  details: string;
-}
+import { ContributionStep } from '../types';
 
 interface GuidedContributionProps {
   open: boolean;

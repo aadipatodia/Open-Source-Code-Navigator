@@ -16,15 +16,7 @@ import {
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
 import { brand } from '../theme/theme';
-
-export interface FileItem {
-  name: string;
-  path: string;
-  type: 'file' | 'directory';
-  language?: string;
-  size?: number;
-  children?: FileItem[];
-}
+import { FileItem } from '../types';
 
 interface FileExplorerProps {
   structure: FileItem[];

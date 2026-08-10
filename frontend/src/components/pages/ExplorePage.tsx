@@ -20,17 +20,14 @@ import { alpha } from '@mui/material/styles';
 
 import { brand } from '../../theme/theme';
 import { useAppData } from '../../context/AppDataContext';
-import { User } from '../../types';
+import { FileItem } from '../../types';
 import RepositoryInput from '../RepositoryInput';
 import FileExplorer from '../FileExplorer';
 import CodebaseAnalysis from '../CodebaseAnalysis';
 import SectionHeader from '../common/SectionHeader';
+import IconTile from '../common/IconTile';
 
-interface ExplorePageProps {
-  user: User;
-}
-
-const ExplorePage: React.FC<ExplorePageProps> = ({ user }) => {
+const ExplorePage: React.FC = () => {
   const {
     repoUrl,
     repoStructure,
@@ -96,19 +93,9 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ user }) => {
               background: `linear-gradient(135deg, ${alpha(brand.primary, 0.1)} 0%, ${alpha(brand.secondary, 0.05)} 100%)`,
             }}
           >
-            <Box
-              sx={{
-                width: 36,
-                height: 36,
-                borderRadius: 2,
-                display: 'grid',
-                placeItems: 'center',
-                background: alpha(brand.primary, 0.18),
-                color: brand.primary,
-              }}
-            >
+            <IconTile color={brand.primary} size={36} tint={0.18}>
               <GitHub />
-            </Box>
+            </IconTile>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography variant="caption" sx={{ color: brand.textSubtle, letterSpacing: '0.12em' }}>
                 CURRENTLY VIEWING
@@ -216,7 +203,6 @@ const ExplorePage: React.FC<ExplorePageProps> = ({ user }) => {
                   language={selectedFile.name.split('.').pop() || 'plaintext'}
                   fileName={selectedFile.name}
                   filePath={selectedFile.path}
-                  user={user}
                 />
               ) : (
                 <EmptyViewer />
@@ -243,19 +229,9 @@ const EmptyViewer: React.FC = () => (
       gap: 1.5,
     }}
   >
-    <Box
-      sx={{
-        width: 72,
-        height: 72,
-        borderRadius: '50%',
-        display: 'grid',
-        placeItems: 'center',
-        background: alpha(brand.primary, 0.12),
-        color: brand.primary,
-      }}
-    >
+    <IconTile color={brand.primary} size={72} tint={0.12} circular>
       <AccountTreeRounded sx={{ fontSize: 36 }} />
-    </Box>
+    </IconTile>
     <Typography variant="h6" sx={{ color: brand.text, fontWeight: 700 }}>
       Pick a file to read
     </Typography>
@@ -265,16 +241,11 @@ const EmptyViewer: React.FC = () => (
   </Box>
 );
 
-function countFiles(items: any[]): number {
-  let count = 0;
-  for (const item of items) {
-    if (item.type === 'directory') {
-      count += countFiles(item.children || []);
-    } else {
-      count += 1;
-    }
-  }
-  return count;
+function countFiles(items: FileItem[]): number {
+  return items.reduce(
+    (total, item) => total + (item.type === 'directory' ? countFiles(item.children || []) : 1),
+    0
+  );
 }
 
 export default ExplorePage;

@@ -1,14 +1,5 @@
-import React, { useState } from 'react';
-import {
-  Box,
-  Typography,
-  IconButton,
-  Tooltip,
-  Paper,
-  Chip,
-  Snackbar,
-  Alert,
-} from '@mui/material';
+import React from 'react';
+import { Box, Typography, IconButton, Tooltip, Paper, Chip } from '@mui/material';
 import {
   ContentCopyRounded,
   CheckRounded,
@@ -19,12 +10,7 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { alpha } from '@mui/material/styles';
 
 import { brand } from '../theme/theme';
-
-interface User {
-  userId: string;
-  name?: string;
-  username?: string;
-}
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 
 interface CodebaseAnalysisProps {
   content: string;
@@ -32,7 +18,6 @@ interface CodebaseAnalysisProps {
   language: string;
   fileName?: string;
   filePath?: string;
-  user: User;
 }
 
 const LANGUAGE_MAP: Record<string, string> = {
@@ -80,18 +65,9 @@ const CodebaseAnalysis: React.FC<CodebaseAnalysisProps> = ({
   fileName,
   filePath,
 }) => {
-  const [copied, setCopied] = useState(false);
+  const { copy, copiedKey } = useCopyToClipboard();
+  const copied = copiedKey !== null;
   const resolvedLanguage = resolveLanguage(language);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-    } catch {
-      // ignore
-    }
-  };
-
   const lineCount = content ? content.split('\n').length : 0;
 
   return (
@@ -158,7 +134,7 @@ const CodebaseAnalysis: React.FC<CodebaseAnalysisProps> = ({
           }}
         />
         <Tooltip title={copied ? 'Copied!' : 'Copy file contents'} arrow>
-          <IconButton onClick={handleCopy} size="small">
+          <IconButton onClick={() => copy(content)} size="small">
             {copied ? (
               <CheckRounded sx={{ fontSize: 18, color: brand.success }} />
             ) : (
@@ -215,20 +191,6 @@ const CodebaseAnalysis: React.FC<CodebaseAnalysisProps> = ({
         )}
       </Box>
 
-      <Snackbar
-        open={copied}
-        autoHideDuration={1600}
-        onClose={() => setCopied(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          severity="success"
-          variant="filled"
-          sx={{ width: '100%', bgcolor: brand.success }}
-        >
-          Copied file contents
-        </Alert>
-      </Snackbar>
     </Paper>
   );
 };

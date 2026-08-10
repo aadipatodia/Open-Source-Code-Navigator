@@ -21,7 +21,8 @@ import { alpha } from '@mui/material/styles';
 
 import { brand, brandGradient } from '../theme/theme';
 import MarkdownRenderer from './common/MarkdownRenderer';
-import { ChatMessage } from '../context/AppDataContext';
+import IconTile from './common/IconTile';
+import { ChatMessage } from '../types';
 
 interface ChatComponentProps {
   onSendMessage: (message: string) => void;
@@ -228,19 +229,9 @@ const EmptyState: React.FC<{
         py: compact ? 2 : 4,
       }}
     >
-      <Box
-        sx={{
-          width: compact ? 48 : 64,
-          height: compact ? 48 : 64,
-          borderRadius: '50%',
-          display: 'grid',
-          placeItems: 'center',
-          background: alpha(brand.primary, 0.16),
-          color: brand.primary,
-        }}
-      >
+      <IconTile color={brand.primary} size={compact ? 48 : 64} circular>
         <AutoAwesomeRounded sx={{ fontSize: compact ? 24 : 30 }} />
-      </Box>
+      </IconTile>
       <Typography variant={compact ? 'body2' : 'h6'} sx={{ color: brand.text, fontWeight: 700 }}>
         Your AI mentor is ready
       </Typography>

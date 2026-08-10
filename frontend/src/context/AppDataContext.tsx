@@ -1,48 +1,18 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-} from 'react';
-import { FileItem } from '../components/FileExplorer';
+import React, { createContext, useCallback, useContext, useState } from 'react';
+
 import { apiClient, getApiError } from '../config/api';
+import {
+  AnalysisHistoryItem,
+  ChatMessage,
+  ContributionStep,
+  FileItem,
+  Issue,
+} from '../types';
 
-// ---------------------------------------------------------------------------
-// Shared types
-// ---------------------------------------------------------------------------
-export interface Issue {
-  id: number;
-  title: string;
-  url: string;
-  labels: string[];
-  repoName: string;
-}
+type GuideMode = 'issue' | 'repo';
 
-export interface ChatMessage {
-  id: string;
-  text: string;
-  sender: 'user' | 'ai';
-  timestamp: number;
-}
-
-export interface ContributionStep {
-  step: number;
-  title: string;
-  details: string;
-}
-
-export interface AnalysisHistoryItem {
-  id: string;
-  preview: string;
-  timestamp: number;
-}
-
-// ---------------------------------------------------------------------------
-// Context shape
-// ---------------------------------------------------------------------------
 interface AppDataContextValue {
-  // Repository / explorer
+  // Repository explorer
   repoUrl: string | null;
   repoStructure: FileItem[] | null;
   repoLoading: boolean;
@@ -53,7 +23,7 @@ interface AppDataContextValue {
   loadRepository: (url: string) => Promise<void>;
   selectFile: (file: FileItem) => Promise<void>;
 
-  // Issues
+  // Issue search
   issues: Issue[];
   issuesLoading: boolean;
   issuesError: string;
@@ -63,7 +33,7 @@ interface AppDataContextValue {
   contributionPlan: ContributionStep[] | null;
   guideLoading: boolean;
   guideError: string;
-  guideMode: 'issue' | 'repo' | null;
+  guideMode: GuideMode | null;
   selectedIssueForGuide: Issue | null;
   guideRepoLabel: string;
   isGuideOpen: boolean;
@@ -77,20 +47,17 @@ interface AppDataContextValue {
   askQuestion: (message: string) => Promise<void>;
   clearChat: () => void;
 
-  // Recent analyses (kept locally)
+  // Recent analyses (in-memory only)
   recentAnalyses: AnalysisHistoryItem[];
   addAnalysis: (preview: string) => void;
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
 
-// ---------------------------------------------------------------------------
-// Provider
-// ---------------------------------------------------------------------------
-export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
-  // Repo state
+/** Strip the github.com prefix so we can show `owner/repo`. */
+const repoLabelFor = (url: string) => url.replace(/^https?:\/\/(www\.)?github\.com\//, '');
+
+export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [repoUrl, setRepoUrl] = useState<string | null>(null);
   const [repoStructure, setRepoStructure] = useState<FileItem[] | null>(null);
   const [repoLoading, setRepoLoading] = useState(false);
@@ -99,25 +66,21 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
   const [fileContent, setFileContent] = useState('');
   const [fileLoading, setFileLoading] = useState(false);
 
-  // Issues state
   const [issues, setIssues] = useState<Issue[]>([]);
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [issuesError, setIssuesError] = useState('');
 
-  // Guided contribution state
   const [contributionPlan, setContributionPlan] = useState<ContributionStep[] | null>(null);
   const [guideLoading, setGuideLoading] = useState(false);
   const [guideError, setGuideError] = useState('');
-  const [guideMode, setGuideMode] = useState<'issue' | 'repo' | null>(null);
+  const [guideMode, setGuideMode] = useState<GuideMode | null>(null);
   const [selectedIssueForGuide, setSelectedIssueForGuide] = useState<Issue | null>(null);
   const [guideRepoLabel, setGuideRepoLabel] = useState('');
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
-  // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
 
-  // Local history (not persisted)
   const [recentAnalyses, setRecentAnalyses] = useState<AnalysisHistoryItem[]>([]);
 
   const loadRepository = useCallback(async (url: string) => {
@@ -130,7 +93,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
       const res = await apiClient.post('/api/analyze/repo', { repoUrl: url });
       setRepoStructure(res.data.structure);
       setRepoUrl(url);
-    } catch (err: unknown) {
+    } catch (err) {
       setRepoError(getApiError(err, 'Failed to analyze repository.'));
     } finally {
       setRepoLoading(false);
@@ -148,8 +111,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
           params: { repo_url: repoUrl, file_path: file.path },
         });
         setFileContent(res.data.content);
-      } catch (err) {
-        console.error('Failed to fetch file content', err);
+      } catch {
         setFileContent('// Error: Could not load file content.');
       } finally {
         setFileLoading(false);
@@ -164,7 +126,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const res = await apiClient.post('/api/issues/find', { skills });
       setIssues(res.data);
-    } catch (err: unknown) {
+    } catch (err) {
       setIssuesError(getApiError(err, 'Failed to find issues.'));
       setIssues([]);
     } finally {
@@ -172,81 +134,71 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  const openGuideForIssue = useCallback(async (issue: Issue) => {
-    setSelectedIssueForGuide(issue);
-    setGuideMode('issue');
-    setGuideRepoLabel('');
+  /** Open the guide drawer in a loading state, then run `request` to fill it. */
+  const runGuide = useCallback(async (request: () => Promise<ContributionStep[]>) => {
     setIsGuideOpen(true);
     setGuideLoading(true);
     setGuideError('');
     setContributionPlan(null);
     try {
-      const repoFullUrl = `https://github.com/${issue.repoName}`;
-      const res = await apiClient.post('/api/contribute/guide', {
-        repoUrl: repoFullUrl,
-        issueUrl: issue.url,
-        issueTitle: issue.title,
-        issueBody: '',
-      });
-      setContributionPlan(res.data.plan);
-    } catch (err: unknown) {
+      setContributionPlan(await request());
+    } catch (err) {
       setGuideError(getApiError(err, 'Failed to generate contribution guide.'));
     } finally {
       setGuideLoading(false);
     }
   }, []);
 
-  const openGuideForRepo = useCallback(async (url: string) => {
-    const label = url.replace(/^https?:\/\/(www\.)?github\.com\//, '');
-    setGuideMode('repo');
-    setSelectedIssueForGuide(null);
-    setGuideRepoLabel(label);
-    setIsGuideOpen(true);
-    setGuideLoading(true);
-    setGuideError('');
-    setContributionPlan(null);
-    try {
-      const res = await apiClient.post('/api/contribute/repo-guide', { repoUrl: url });
-      setContributionPlan(res.data.plan);
-    } catch (err: unknown) {
-      setGuideError(getApiError(err, 'Failed to generate repo contribution guide.'));
-    } finally {
-      setGuideLoading(false);
-    }
-  }, []);
+  const openGuideForIssue = useCallback(
+    async (issue: Issue) => {
+      setGuideMode('issue');
+      setSelectedIssueForGuide(issue);
+      setGuideRepoLabel('');
+      await runGuide(async () => {
+        const res = await apiClient.post('/api/contribute/guide', {
+          repoUrl: `https://github.com/${issue.repoName}`,
+          issueUrl: issue.url,
+          issueTitle: issue.title,
+          issueBody: '',
+        });
+        return res.data.plan;
+      });
+    },
+    [runGuide]
+  );
 
-  const closeGuide = useCallback(() => {
-    setIsGuideOpen(false);
-  }, []);
+  const openGuideForRepo = useCallback(
+    async (url: string) => {
+      setGuideMode('repo');
+      setSelectedIssueForGuide(null);
+      setGuideRepoLabel(repoLabelFor(url));
+      await runGuide(async () => {
+        const res = await apiClient.post('/api/contribute/repo-guide', { repoUrl: url });
+        return res.data.plan;
+      });
+    },
+    [runGuide]
+  );
+
+  const closeGuide = useCallback(() => setIsGuideOpen(false), []);
 
   const askQuestion = useCallback(async (message: string) => {
-    const trimmed = message.trim();
-    if (!trimmed) return;
-    const userMessage: ChatMessage = {
-      id: `${Date.now()}-u`,
-      text: trimmed,
-      sender: 'user',
-      timestamp: Date.now(),
-    };
-    setChatMessages((prev) => [...prev, userMessage]);
+    const text = message.trim();
+    if (!text) return;
+
+    const append = (sender: ChatMessage['sender'], body: string) =>
+      setChatMessages((prev) => [
+        ...prev,
+        { id: `${Date.now()}-${prev.length}`, text: body, sender, timestamp: Date.now() },
+      ]);
+
+    append('user', text);
     setChatLoading(true);
     try {
-      const res = await apiClient.post('/api/chat', { message: trimmed });
-      const aiMessage: ChatMessage = {
-        id: `${Date.now()}-a`,
-        text: res.data.response || '...',
-        sender: 'ai',
-        timestamp: Date.now(),
-      };
-      setChatMessages((prev) => [...prev, aiMessage]);
-    } catch (err) {
-      const aiMessage: ChatMessage = {
-        id: `${Date.now()}-a-err`,
-        text: "Sorry — I couldn't get a response. Please try again in a moment.",
-        sender: 'ai',
-        timestamp: Date.now(),
-      };
-      setChatMessages((prev) => [...prev, aiMessage]);
+      const res = await apiClient.post('/api/chat', { message: text });
+      append('ai', res.data.response || '...');
+    } catch {
+      append('ai', "Sorry — I couldn't get a response. Please try again in a moment.");
     } finally {
       setChatLoading(false);
     }
@@ -256,91 +208,47 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const addAnalysis = useCallback((preview: string) => {
     setRecentAnalyses((prev) =>
-      [
-        {
-          id: `${Date.now()}`,
-          preview: preview.slice(0, 90),
-          timestamp: Date.now(),
-        },
-        ...prev,
-      ].slice(0, 5)
+      [{ id: `${Date.now()}`, preview: preview.slice(0, 90), timestamp: Date.now() }, ...prev].slice(0, 5)
     );
   }, []);
 
-  const value = useMemo<AppDataContextValue>(
-    () => ({
-      repoUrl,
-      repoStructure,
-      repoLoading,
-      repoError,
-      selectedFile,
-      fileContent,
-      fileLoading,
-      loadRepository,
-      selectFile,
-      issues,
-      issuesLoading,
-      issuesError,
-      findIssues,
-      contributionPlan,
-      guideLoading,
-      guideError,
-      guideMode,
-      selectedIssueForGuide,
-      guideRepoLabel,
-      isGuideOpen,
-      openGuideForIssue,
-      openGuideForRepo,
-      closeGuide,
-      chatMessages,
-      chatLoading,
-      askQuestion,
-      clearChat,
-      recentAnalyses,
-      addAnalysis,
-    }),
-    [
-      repoUrl,
-      repoStructure,
-      repoLoading,
-      repoError,
-      selectedFile,
-      fileContent,
-      fileLoading,
-      loadRepository,
-      selectFile,
-      issues,
-      issuesLoading,
-      issuesError,
-      findIssues,
-      contributionPlan,
-      guideLoading,
-      guideError,
-      guideMode,
-      selectedIssueForGuide,
-      guideRepoLabel,
-      isGuideOpen,
-      openGuideForIssue,
-      openGuideForRepo,
-      closeGuide,
-      chatMessages,
-      chatLoading,
-      askQuestion,
-      clearChat,
-      recentAnalyses,
-      addAnalysis,
-    ]
-  );
+  const value: AppDataContextValue = {
+    repoUrl,
+    repoStructure,
+    repoLoading,
+    repoError,
+    selectedFile,
+    fileContent,
+    fileLoading,
+    loadRepository,
+    selectFile,
+    issues,
+    issuesLoading,
+    issuesError,
+    findIssues,
+    contributionPlan,
+    guideLoading,
+    guideError,
+    guideMode,
+    selectedIssueForGuide,
+    guideRepoLabel,
+    isGuideOpen,
+    openGuideForIssue,
+    openGuideForRepo,
+    closeGuide,
+    chatMessages,
+    chatLoading,
+    askQuestion,
+    clearChat,
+    recentAnalyses,
+    addAnalysis,
+  };
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 };
 
 export const useAppData = (): AppDataContextValue => {
   const ctx = useContext(AppDataContext);
-  if (!ctx) {
-    throw new Error('useAppData must be used within an <AppDataProvider />');
-  }
+  if (!ctx) throw new Error('useAppData must be used within an <AppDataProvider />');
   return ctx;
 };
-
-export { API_BASE } from '../config/api';

@@ -28,7 +28,9 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import { brand } from '../theme/theme';
 import { apiClient, getApiError } from '../config/api';
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import MarkdownRenderer from './common/MarkdownRenderer';
+import IconTile from './common/IconTile';
 
 interface AnalysisResponse {
   is_correct: boolean;
@@ -56,7 +58,7 @@ const CodeInput: React.FC<CodeInputProps> = ({ onAnalysisComplete }) => {
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const { copy, copiedKey } = useCopyToClipboard();
 
   const loadSample = () => {
     setCode(SAMPLE_CODE);
@@ -100,34 +102,14 @@ const CodeInput: React.FC<CodeInputProps> = ({ onAnalysisComplete }) => {
     }
   };
 
-  const handleCopy = async (text: string, key: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedKey(key);
-      window.setTimeout(() => setCopiedKey(null), 1400);
-    } catch {
-      // ignore
-    }
-  };
-
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* Input card */}
       <Paper sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3 }}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-          <Box
-            sx={{
-              width: 40,
-              height: 40,
-              borderRadius: 2,
-              display: 'grid',
-              placeItems: 'center',
-              background: alpha(brand.accent, 0.16),
-              color: brand.accent,
-            }}
-          >
+          <IconTile color={brand.accent}>
             <CodeRounded />
-          </Box>
+          </IconTile>
           <Box sx={{ flex: 1 }}>
             <Typography variant="h6" sx={{ color: brand.text, fontWeight: 700 }}>
               Paste code, get an instant review
@@ -234,7 +216,7 @@ const CodeInput: React.FC<CodeInputProps> = ({ onAnalysisComplete }) => {
             <Tooltip title={copiedKey === 'explanation' ? 'Copied!' : 'Copy explanation'} arrow>
               <IconButton
                 size="small"
-                onClick={() => handleCopy(analysis.explanation, 'explanation')}
+                onClick={() => copy(analysis.explanation, 'explanation')}
               >
                 <ContentCopyRounded sx={{ fontSize: 18 }} />
               </IconButton>
@@ -267,7 +249,7 @@ const CodeInput: React.FC<CodeInputProps> = ({ onAnalysisComplete }) => {
                 <Tooltip title={copiedKey === 'corrected' ? 'Copied!' : 'Copy corrected code'} arrow>
                   <IconButton
                     size="small"
-                    onClick={() => handleCopy(analysis.corrected_code!, 'corrected')}
+                    onClick={() => copy(analysis.corrected_code!, 'corrected')}
                   >
                     <ContentCopyRounded sx={{ fontSize: 18 }} />
                   </IconButton>

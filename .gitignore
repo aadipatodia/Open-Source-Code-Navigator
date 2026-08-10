@@ -6,14 +6,26 @@ __pycache__/
 *.db
 *.sqlite3
 
-# Virtual environment
+# Virtual environments
+.venv/
 venv/
-.env/
-*.env
+env/
+
+# Secrets
+.env
+.env.*
+!.env.example
 
 # Node.js
 node_modules/
 
+# Build output
+build/
+dist/
+
 # IDEs
 .vscode/
 .idea/
+
+# OS
+.DS_Store

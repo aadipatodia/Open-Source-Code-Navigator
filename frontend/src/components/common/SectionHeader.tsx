@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
 import { brand } from '../../theme/theme';
+import IconTile from './IconTile';
 
 interface SectionHeaderProps {
   icon?: React.ReactNode;
@@ -30,22 +30,7 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
-        {icon && (
-          <Box
-            sx={{
-              width: 40,
-              height: 40,
-              borderRadius: 2,
-              display: 'grid',
-              placeItems: 'center',
-              background: alpha(brand.primary, 0.15),
-              color: brand.primary,
-              flexShrink: 0,
-            }}
-          >
-            {icon}
-          </Box>
-        )}
+        {icon && <IconTile color={brand.primary}>{icon}</IconTile>}
         <Box sx={{ minWidth: 0 }}>
           {eyebrow && (
             <Typography

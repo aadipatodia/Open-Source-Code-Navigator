@@ -26,28 +26,6 @@
   z-index: -1;
 }
 
-/* ---------- Subtle "shine" used on hero cards ---------- */
-
-.glow-card {
-  position: relative;
-  overflow: hidden;
-}
-
-.glow-card::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  background: linear-gradient(135deg, rgba(124, 92, 255, 0.55), rgba(34, 211, 238, 0.35) 50%, transparent 75%);
-  opacity: 0.35;
-  pointer-events: none;
-  mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
-  -webkit-mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
-  mask-composite: exclude;
-  -webkit-mask-composite: xor;
-  padding: 1px;
-}
-
 /* ---------- Scrollbars ---------- */
 
 ::-webkit-scrollbar {

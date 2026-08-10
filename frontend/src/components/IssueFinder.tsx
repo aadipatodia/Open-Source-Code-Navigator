@@ -20,14 +20,8 @@ import {
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
 import { brand } from '../theme/theme';
-
-interface Issue {
-  id: number;
-  title: string;
-  url: string;
-  labels: string[];
-  repoName: string;
-}
+import { Issue } from '../types';
+import IconTile from './common/IconTile';
 
 interface IssueFinderProps {
   onFindIssues: (skills: string) => void | Promise<void>;
@@ -67,19 +61,9 @@ const IssueFinder: React.FC<IssueFinderProps> = ({
     <Stack spacing={2}>
       <Paper sx={{ p: 3, borderRadius: 3 }}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-          <Box
-            sx={{
-              width: 40,
-              height: 40,
-              borderRadius: 2,
-              display: 'grid',
-              placeItems: 'center',
-              background: alpha(brand.secondary, 0.16),
-              color: brand.secondary,
-            }}
-          >
+          <IconTile color={brand.secondary}>
             <SearchIcon />
-          </Box>
+          </IconTile>
           <Box>
             <Typography variant="h6" sx={{ color: brand.text, fontWeight: 700 }}>
               Find beginner-friendly issues
@@ -190,20 +174,9 @@ const IssueFinder: React.FC<IssueFinderProps> = ({
                   },
                 }}
               >
-                <Box
-                  sx={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 2,
-                    display: 'grid',
-                    placeItems: 'center',
-                    background: alpha(brand.primary, 0.15),
-                    color: brand.primary,
-                    flexShrink: 0,
-                  }}
-                >
+                <IconTile color={brand.primary} size={36}>
                   <GitHubIcon sx={{ fontSize: 20 }} />
-                </Box>
+                </IconTile>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography
                     sx={{

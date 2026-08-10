@@ -27,7 +27,6 @@ export const brand = {
 };
 
 export const brandGradient = `linear-gradient(135deg, ${brand.primary} 0%, ${brand.secondary} 100%)`;
-export const brandGradientSoft = `linear-gradient(135deg, ${alpha(brand.primary, 0.18)} 0%, ${alpha(brand.secondary, 0.14)} 100%)`;
 
 export const appTheme = createTheme({
   palette: {
@@ -336,6 +335,3 @@ export const appTheme = createTheme({
     },
   },
 });
-
-// Backwards-compat export so existing imports of `ruruTheme` keep working.
-export const ruruTheme = appTheme;
