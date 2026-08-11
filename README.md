@@ -75,15 +75,75 @@ Sign-in uses Firebase Authentication (email/password or Google). Configure your 
 
 ## Deployment
 
-**Backend (Render)** — Runtime `Docker`, Root Directory `backend`, Dockerfile `Dockerfile`. The
+### Backend (Google Cloud Run)
+
+The backend runs as a container on [Cloud Run](https://cloud.google.com/run). The existing
+`backend/Dockerfile` is used as-is; Cloud Run sets `PORT` automatically.
+
+**One-time setup**
+
+1. [Install the Google Cloud CLI](https://cloud.google.com/sdk/docs/install) and sign in:
+   `gcloud auth login`
+2. Create or pick a project, then:
+   `gcloud config set project YOUR_PROJECT_ID`
+3. Enable billing on the project (Cloud Run has a generous free tier).
+
+**Deploy**
+
+```bash
+cd backend
+export GEMINI_API_KEY=your_google_ai_studio_key   # required on first deploy
+export GITHUB_TOKEN=your_github_pat               # optional but recommended
+./deploy.sh
+```
+
+The script enables the required APIs, stores secrets in Secret Manager, grants Cloud Run
+access to them, and deploys with settings suited to this app:
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| Memory | 2 GiB | Git clones and file reads |
+| CPU | 2 | Faster indexing |
+| Timeout | 900 s | Long Gemini contribution plans |
+| Concurrency | 4 | Limits memory pressure per instance |
+
+When it finishes, copy the service URL (e.g. `https://open-source-code-navigator-api-….run.app`).
+
+**CI/CD (optional)** — push builds via Cloud Build:
+
+```bash
+cd backend
+gcloud builds submit --config cloudbuild.yaml .
+```
+
+Create secrets `gemini-api-key` and `github-token` in Secret Manager first, or run
+`./deploy.sh` once so the script creates them.
+
+**Frontend** — on Vercel, set `REACT_APP_API_BASE` to your Cloud Run URL (no trailing slash)
+and redeploy. CORS already allows the production Vercel domain; add others with the
+`ALLOWED_ORIGINS` env var on the Cloud Run service.
+
+**Notes**
+
+- Cloned repositories live in memory and on the container filesystem; they are lost when an
+  instance scales down or is replaced. That matches the current architecture.
+- To update secrets later:
+  `printf '%s' NEW_KEY | gcloud secrets versions add gemini-api-key --data-file=-`
+  then redeploy or restart revisions.
+
+### Backend (Render)
+
+Runtime `Docker`, Root Directory `backend`, Dockerfile `Dockerfile`. The
 Dockerfile pins Python 3.12, which avoids Render's default 3.14 breaking `pydantic-core`. Set
 `GEMINI_API_KEY` and `GITHUB_TOKEN`. If you deploy with the native Python runtime instead, also set
 `PYTHON_VERSION=3.12.8` and clear the build cache after changing it.
 
-**Frontend (Vercel)** — Root Directory `frontend`, Install `npm install --legacy-peer-deps`,
-Build `npm run build`, Output `build`. Set `REACT_APP_API_BASE` to your Render URL with no trailing
-slash. CORS already allows the production Vercel domain and its preview URLs; add any others via the
-`ALLOWED_ORIGINS` environment variable.
+### Frontend (Vercel)
+
+Root Directory `frontend`, Install `npm install --legacy-peer-deps`,
+Build `npm run build`, Output `build`. Set `REACT_APP_API_BASE` to your backend URL (Cloud Run or
+Render) with no trailing slash. CORS already allows the production Vercel domain and its preview
+URLs; add any others via the `ALLOWED_ORIGINS` environment variable on the backend.
 
 ## Team
 

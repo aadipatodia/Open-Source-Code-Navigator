@@ -1,0 +1,70 @@
+# Build the backend image and deploy to Cloud Run.
+#
+# Prerequisites (once per GCP project):
+#   gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
+#     artifactregistry.googleapis.com secretmanager.googleapis.com
+#   Create secrets gemini-api-key and github-token in Secret Manager.
+#   Grant the Cloud Run service account secretAccessor on both secrets
+#   (see deploy.sh — it does this automatically).
+#
+# Deploy from the backend/ directory:
+#   gcloud builds submit --config cloudbuild.yaml .
+#
+# Optional substitutions (override on the command line):
+#   gcloud builds submit --config cloudbuild.yaml . \
+#     --substitutions=_REGION=us-central1,_SERVICE=open-source-code-navigator-api
+
+substitutions:
+  _REGION: us-central1
+  _SERVICE: open-source-code-navigator-api
+  _MEMORY: 2Gi
+  _CPU: "2"
+  _TIMEOUT: "900"
+  _CONCURRENCY: "4"
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/${_SERVICE}:$SHORT_SHA
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/${_SERVICE}:$SHORT_SHA
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/${_SERVICE}:$SHORT_SHA
+      - --region
+      - ${_REGION}
+      - --platform
+      - managed
+      - --allow-unauthenticated
+      - --memory
+      - ${_MEMORY}
+      - --cpu
+      - ${_CPU}
+      - --timeout
+      - ${_TIMEOUT}
+      - --concurrency
+      - ${_CONCURRENCY}
+      - --min-instances
+      - "0"
+      - --max-instances
+      - "10"
+      - --set-secrets
+      - GEMINI_API_KEY=gemini-api-key:latest,GITHUB_TOKEN=github-token:latest
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/${_SERVICE}:$SHORT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY
