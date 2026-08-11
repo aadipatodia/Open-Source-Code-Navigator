@@ -16,6 +16,7 @@ import {
   AutoAwesomeRounded,
   PersonRounded,
   ClearAllRounded,
+  HistoryRounded,
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
 
@@ -33,6 +34,9 @@ interface ChatComponentProps {
   onClear?: () => void;
   /** Render in a compact (sidebar-style) layout when true. */
   compact?: boolean;
+  /** Messages the model currently remembers, out of `historyLimit`. */
+  historyUsed?: number;
+  historyLimit?: number;
 }
 
 const ChatComponent: React.FC<ChatComponentProps> = ({
@@ -43,6 +47,8 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   suggestedPrompts = [],
   onClear,
   compact = false,
+  historyUsed,
+  historyLimit,
 }) => {
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -156,7 +162,28 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
         </Box>
 
         {messages.length > 0 && onClear && !compact && (
-          <Box sx={{ px: 2, py: 1, borderTop: `1px solid ${brand.border}`, textAlign: 'right' }}>
+          <Box
+            sx={{
+              px: 2,
+              py: 1,
+              borderTop: `1px solid ${brand.border}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+            }}
+          >
+            {historyLimit ? (
+              <Chip
+                icon={<HistoryRounded sx={{ fontSize: 16 }} />}
+                label={`Remembering ${historyUsed ?? 0} of ${historyLimit} messages`}
+                size="small"
+                variant="outlined"
+                sx={{ color: brand.textMuted, borderColor: brand.border }}
+              />
+            ) : (
+              <span />
+            )}
             <Chip
               icon={<ClearAllRounded sx={{ fontSize: 16 }} />}
               label="Clear conversation"
@@ -237,7 +264,7 @@ const EmptyState: React.FC<{
       </Typography>
       {!compact && (
         <Typography variant="body2" sx={{ maxWidth: 380 }}>
-          Ask about a codebase, an error message, an OSS concept — anything.
+          Ask about a codebase, an error message, an OSS concept — anything in software.
         </Typography>
       )}
       {suggestedPrompts.length > 0 && (
@@ -270,6 +297,33 @@ const MessageBubble: React.FC<{ message: ChatMessage; compact?: boolean }> = ({
   message,
   compact,
 }) => {
+  // Notices come from the app, not the model, so they sit apart from the thread.
+  if (message.sender === 'system') {
+    return (
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ my: 0.5 }}>
+        <Box sx={{ flex: 1, height: '1px', background: brand.border }} />
+        <Stack
+          direction="row"
+          spacing={0.75}
+          alignItems="center"
+          sx={{
+            px: 1.25,
+            py: 0.5,
+            borderRadius: 999,
+            border: `1px solid ${alpha(brand.secondary, 0.3)}`,
+            background: alpha(brand.secondary, 0.08),
+          }}
+        >
+          <HistoryRounded sx={{ fontSize: 14, color: brand.secondary }} />
+          <Typography variant="caption" sx={{ color: brand.textMuted, textAlign: 'center' }}>
+            {message.text}
+          </Typography>
+        </Stack>
+        <Box sx={{ flex: 1, height: '1px', background: brand.border }} />
+      </Stack>
+    );
+  }
+
   const isUser = message.sender === 'user';
   return (
     <Stack

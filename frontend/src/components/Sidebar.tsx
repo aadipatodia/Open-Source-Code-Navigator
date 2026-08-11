@@ -35,7 +35,7 @@ const navItems = [
   { to: '/explore', label: 'Explore Repo', icon: <AccountTreeRounded />, description: 'Browse & read code' },
   { to: '/issues', label: 'Find Issues', icon: <TravelExploreRounded />, description: 'Beginner-friendly tasks' },
   { to: '/analyze', label: 'Analyze Code', icon: <BiotechRounded />, description: 'Explain & secure snippets' },
-  { to: '/chat', label: 'AI Chat', icon: <ChatBubbleRounded />, description: 'Ask anything' },
+  { to: '/chat', label: 'AI Chat', icon: <ChatBubbleRounded />, description: 'Programming Q&A' },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {

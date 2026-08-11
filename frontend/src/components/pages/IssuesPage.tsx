@@ -8,7 +8,7 @@ import { useAppData } from '../../context/AppDataContext';
 
 const IssuesPage: React.FC = () => {
   const {
-    issues,
+    issueGroups,
     issuesLoading,
     issuesError,
     findIssues,
@@ -21,13 +21,13 @@ const IssuesPage: React.FC = () => {
         icon={<TravelExploreRounded />}
         eyebrow="OPEN-SOURCE ON-RAMP"
         title="Find a beginner-friendly issue"
-        subtitle="Type in some skills, pick an issue, and we'll generate a personalized contribution plan."
+        subtitle="Type in some skills, open a project that needs help, and pick an issue to get a personalized contribution plan."
       />
       <IssueFinder
         onFindIssues={findIssues}
         onSelectIssue={openGuideForIssue}
         loading={issuesLoading}
-        issues={issues}
+        groups={issueGroups}
         error={issuesError}
       />
     </Box>

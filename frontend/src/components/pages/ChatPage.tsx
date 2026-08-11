@@ -4,7 +4,7 @@ import { ChatBubbleRounded } from '@mui/icons-material';
 
 import SectionHeader from '../common/SectionHeader';
 import ChatComponent from '../ChatComponent';
-import { useAppData } from '../../context/AppDataContext';
+import { CHAT_HISTORY_LIMIT, useAppData } from '../../context/AppDataContext';
 
 const SUGGESTED = [
   'How do I open my first pull request on GitHub?',
@@ -14,7 +14,7 @@ const SUGGESTED = [
 ];
 
 const ChatPage: React.FC = () => {
-  const { chatMessages, chatLoading, askQuestion, clearChat } = useAppData();
+  const { chatMessages, chatLoading, chatTurns, askQuestion, clearChat } = useAppData();
 
   return (
     <Box
@@ -29,8 +29,8 @@ const ChatPage: React.FC = () => {
       <SectionHeader
         icon={<ChatBubbleRounded />}
         eyebrow="AI CHAT"
-        title="Ask the Code Navigator anything"
-        subtitle="Concepts, commands, error messages — your AI pair-programmer is one message away."
+        title="Ask the Code Navigator"
+        subtitle="Concepts, commands, error messages — anything about software. Other subjects are out of scope."
       />
 
       <Box sx={{ flex: 1, minHeight: 0 }}>
@@ -40,6 +40,8 @@ const ChatPage: React.FC = () => {
           messages={chatMessages}
           suggestedPrompts={SUGGESTED}
           onClear={clearChat}
+          historyUsed={chatTurns}
+          historyLimit={CHAT_HISTORY_LIMIT}
         />
       </Box>
     </Box>

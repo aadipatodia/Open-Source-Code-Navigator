@@ -20,10 +20,20 @@ export interface Issue {
   repoName: string;
 }
 
+/** Every matching issue from one repository, so search results read as projects. */
+export interface RepoIssueGroup {
+  repoName: string;
+  repoUrl: string;
+  /** Total matches, which can exceed `issues.length` when a repo has many. */
+  issueCount: number;
+  issues: Issue[];
+}
+
 export interface ChatMessage {
   id: string;
   text: string;
-  sender: 'user' | 'ai';
+  /** `system` is a notice from the app itself, never sent to the model. */
+  sender: 'user' | 'ai' | 'system';
   timestamp: number;
 }
 

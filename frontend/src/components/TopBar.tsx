@@ -36,7 +36,7 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
     subtitle: 'Get an explanation and a security review in seconds.',
   },
   '/chat': {
-    title: 'Ask the AI anything',
+    title: 'Ask about code',
     subtitle: 'Your pair-programmer is one message away.',
   },
 };

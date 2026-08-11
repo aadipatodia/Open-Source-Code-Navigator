@@ -53,7 +53,7 @@ const quickActions = [
     to: '/chat',
     icon: <ChatBubbleRounded />,
     title: 'Talk to your AI mentor',
-    body: 'Ask anything from "what is a fork?" to "explain this regex".',
+    body: 'From "what is a fork?" to "explain this regex" — any software question.',
     accent: '#a78bfa',
   },
 ];

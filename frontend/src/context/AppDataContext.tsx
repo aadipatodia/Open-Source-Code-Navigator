@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 
 import { apiClient, getApiError } from '../config/api';
 import {
@@ -7,9 +7,19 @@ import {
   ContributionStep,
   FileItem,
   Issue,
+  RepoIssueGroup,
 } from '../types';
 
 type GuideMode = 'issue' | 'repo';
+
+/**
+ * How many of the user's messages one context window holds. The model sees this
+ * many turns; once the window is full it resets, and the user is warned first.
+ */
+export const CHAT_HISTORY_LIMIT = 7;
+
+/** One turn as the API wants it — the visible transcript also carries notices. */
+type ChatTurn = { role: 'user' | 'ai'; text: string };
 
 interface AppDataContextValue {
   // Repository explorer
@@ -24,7 +34,7 @@ interface AppDataContextValue {
   selectFile: (file: FileItem) => Promise<void>;
 
   // Issue search
-  issues: Issue[];
+  issueGroups: RepoIssueGroup[];
   issuesLoading: boolean;
   issuesError: string;
   findIssues: (skills: string) => Promise<void>;
@@ -44,6 +54,8 @@ interface AppDataContextValue {
   // Chat
   chatMessages: ChatMessage[];
   chatLoading: boolean;
+  /** How many of the user's messages the model currently remembers. */
+  chatTurns: number;
   askQuestion: (message: string) => Promise<void>;
   clearChat: () => void;
 
@@ -66,7 +78,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [fileContent, setFileContent] = useState('');
   const [fileLoading, setFileLoading] = useState(false);
 
-  const [issues, setIssues] = useState<Issue[]>([]);
+  const [issueGroups, setIssueGroups] = useState<RepoIssueGroup[]>([]);
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [issuesError, setIssuesError] = useState('');
 
@@ -80,6 +92,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatTurns, setChatTurns] = useState(0);
+  // The turns the model is given. The visible transcript outlives this and only
+  // resets when the user starts a new conversation.
+  const chatContext = useRef<ChatTurn[]>([]);
 
   const [recentAnalyses, setRecentAnalyses] = useState<AnalysisHistoryItem[]>([]);
 
@@ -125,10 +141,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIssuesError('');
     try {
       const res = await apiClient.post('/api/issues/find', { skills });
-      setIssues(res.data);
+      setIssueGroups(res.data);
     } catch (err) {
       setIssuesError(getApiError(err, 'Failed to find issues.'));
-      setIssues([]);
+      setIssueGroups([]);
     } finally {
       setIssuesLoading(false);
     }
@@ -192,19 +208,44 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
         { id: `${Date.now()}-${prev.length}`, text: body, sender, timestamp: Date.now() },
       ]);
 
+    const history = chatContext.current;
     append('user', text);
     setChatLoading(true);
     try {
-      const res = await apiClient.post('/api/chat', { message: text });
-      append('ai', res.data.response || '...');
+      const res = await apiClient.post('/api/chat', { message: text, history });
+      const reply = res.data.response || '...';
+      append('ai', reply);
+
+      const turns = [...history, { role: 'user' as const, text }, { role: 'ai' as const, text: reply }];
+      const used = turns.length / 2;
+
+      if (used >= CHAT_HISTORY_LIMIT) {
+        chatContext.current = [];
+        setChatTurns(0);
+        append('system', 'History cleared. The next message starts a fresh conversation.');
+      } else {
+        chatContext.current = turns;
+        setChatTurns(used);
+        if (used === CHAT_HISTORY_LIMIT - 1) {
+          append(
+            'system',
+            `This chat remembers your last ${CHAT_HISTORY_LIMIT} messages. History will be cleared after your next message.`
+          );
+        }
+      }
     } catch {
+      // A failed turn is not part of the conversation, so the window is untouched.
       append('ai', "Sorry — I couldn't get a response. Please try again in a moment.");
     } finally {
       setChatLoading(false);
     }
   }, []);
 
-  const clearChat = useCallback(() => setChatMessages([]), []);
+  const clearChat = useCallback(() => {
+    setChatMessages([]);
+    setChatTurns(0);
+    chatContext.current = [];
+  }, []);
 
   const addAnalysis = useCallback((preview: string) => {
     setRecentAnalyses((prev) =>
@@ -222,7 +263,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     fileLoading,
     loadRepository,
     selectFile,
-    issues,
+    issueGroups,
     issuesLoading,
     issuesError,
     findIssues,
@@ -238,6 +279,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     closeGuide,
     chatMessages,
     chatLoading,
+    chatTurns,
     askQuestion,
     clearChat,
     recentAnalyses,
