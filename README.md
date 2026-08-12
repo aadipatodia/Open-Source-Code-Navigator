@@ -149,4 +149,3 @@ URLs; add any others via the `ALLOWED_ORIGINS` environment variable on the backe
 
 - [Aadi Patodia](https://github.com/aadipatodia)
 - [Bhoomika Singh](https://github.com/Bhoomikaaa001)
-- [Ansh Chauhan](https://github.com/Ansh0864)
