@@ -1,3 +1,4 @@
+// Issue finder — skills-based search for good-first-issue tickets, grouped by repo.
 import React, { useEffect, useState } from 'react';
 import {
   Paper,
@@ -35,8 +36,10 @@ interface IssueFinderProps {
 
 const PRESETS = ['Python', 'React', 'TypeScript', 'docs', 'Rust', 'Go', 'design'];
 
+/** Return "1 issue" or "3 issues" — simple English pluralization. */
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
+/** Search form + collapsible results list, one section per repository. */
 const IssueFinder: React.FC<IssueFinderProps> = ({
   onFindIssues,
   onSelectIssue,

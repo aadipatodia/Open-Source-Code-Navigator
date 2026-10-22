@@ -1,3 +1,4 @@
+// Chat component — message thread, input box, typing indicator, and suggested prompts.
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Box,
@@ -21,8 +22,7 @@ import {
 import { alpha } from '@mui/material/styles';
 
 import { brand, brandGradient } from '../theme';
-import { MarkdownRenderer } from '../ui';
-import { IconTile } from '../ui';
+import { MarkdownRenderer, IconTile } from '../ui';
 import { ChatMessage } from '../types';
 
 interface ChatComponentProps {
@@ -39,6 +39,7 @@ interface ChatComponentProps {
   historyLimit?: number;
 }
 
+/** Chat thread with auto-scroll, typing dots, history counter, and clear button. */
 const ChatComponent: React.FC<ChatComponentProps> = ({
   onSendMessage,
   isLoading,
@@ -234,9 +235,7 @@ const ChatComponent: React.FC<ChatComponentProps> = ({
   );
 };
 
-// ---------------------------------------------------------------------------
-// Empty state
-// ---------------------------------------------------------------------------
+/** Placeholder shown when the chat has no messages yet. */
 const EmptyState: React.FC<{
   suggestedPrompts: string[];
   onSelect: (prompt: string) => void;
@@ -290,9 +289,7 @@ const EmptyState: React.FC<{
   );
 };
 
-// ---------------------------------------------------------------------------
-// Single message bubble
-// ---------------------------------------------------------------------------
+/** Single message row — user on the right, AI on the left, system as a divider. */
 const MessageBubble: React.FC<{ message: ChatMessage; compact?: boolean }> = ({
   message,
   compact,

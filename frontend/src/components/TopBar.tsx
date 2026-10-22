@@ -1,3 +1,4 @@
+// Top bar — sticky header showing the current page title, subtitle, and user avatar.
 import React from 'react';
 import {
   AppBar,
@@ -41,6 +42,7 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
   },
 };
 
+/** Render the top bar with contextual title based on the current route. */
 const TopBar: React.FC<TopBarProps> = ({ user, onOpenSidebar, showMenuButton }) => {
   const location = useLocation();
 

@@ -1,12 +1,8 @@
-"""Gather the evidence an answer has to be grounded in.
+"""Evidence gathering — pick the files that matter for a task and quote them.
 
-An answer is only as concrete as what the model can see, and a tree of file
-names is not enough to write real code against. The clone is already on disk,
-so we ask the model which files it would need to read, then quote those files
-back to it. Letting it choose keeps this working for any stack instead of a
-fixed list of filenames we happened to think of.
-
-`repo_guide` and `issue_finder` both build their prompts on `gather_evidence`.
+The model chooses which files to read (so it works for any stack), then their
+contents are line-numbered and injected into the prompt. repo_guide and
+issue_finder both build on gather_evidence().
 """
 
 import asyncio
@@ -32,6 +28,7 @@ SELECT_SYSTEM_INSTRUCTION = (
 
 
 def format_tree(items: List[FileItem], indent: str = "") -> str:
+    """Render a list of FileItems as an indented ASCII tree."""
     lines = []
     for item in items:
         marker = "+-- " if item.type == "directory" else "|-- "
@@ -44,6 +41,7 @@ def format_tree(items: List[FileItem], indent: str = "") -> str:
 
 
 def iter_file_paths(items: List[FileItem]) -> Iterator[str]:
+    """Yield every file path in a nested FileItem tree."""
     for item in items:
         if item.type == "file":
             yield item.path
@@ -125,6 +123,7 @@ def read_selected(repo_root: str, paths: List[str]) -> str:
 
 
 def sources_section(sources: str) -> str:
+    """Wrap quoted file contents in a markdown section header for the prompt."""
     if not sources:
         return (
             "## Source files\n"

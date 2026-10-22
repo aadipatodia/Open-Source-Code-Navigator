@@ -1,3 +1,4 @@
+// Sidebar navigation drawer — permanent on large screens, temporary on mobile.
 import React from 'react';
 import {
   Box,
@@ -147,38 +148,15 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
     </Box>
   );
 
-  if (variant === 'permanent') {
-    return (
-      <Drawer
-        variant="permanent"
-        sx={{
-          width: SIDEBAR_WIDTH,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': {
-            width: SIDEBAR_WIDTH,
-            border: 0,
-            background: 'transparent',
-          },
-        }}
-        open
-      >
-        {content}
-      </Drawer>
-    );
-  }
-
   return (
     <Drawer
-      variant="temporary"
-      open={open}
+      variant={variant}
+      open={variant === 'permanent' ? true : open}
       onClose={onClose}
-      ModalProps={{ keepMounted: true }}
+      ModalProps={variant === 'temporary' ? { keepMounted: true } : undefined}
       sx={{
-        '& .MuiDrawer-paper': {
-          width: SIDEBAR_WIDTH,
-          border: 0,
-          background: 'transparent',
-        },
+        ...(variant === 'permanent' && { width: SIDEBAR_WIDTH, flexShrink: 0 }),
+        '& .MuiDrawer-paper': { width: SIDEBAR_WIDTH, border: 0, background: 'transparent' },
       }}
     >
       {content}

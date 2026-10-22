@@ -1,3 +1,6 @@
+// Shared TypeScript interfaces used across the frontend.
+
+/** Authenticated user profile from Firebase. */
 export interface User {
   userId: string;
   name?: string;
@@ -5,6 +8,7 @@ export interface User {
   picture?: string;
 }
 
+/** One node in the repository file tree (file or directory). */
 export interface FileItem {
   name: string;
   path: string;
@@ -12,6 +16,7 @@ export interface FileItem {
   children?: FileItem[];
 }
 
+/** A single GitHub issue returned by the issue search endpoint. */
 export interface Issue {
   id: number;
   title: string;
@@ -29,6 +34,7 @@ export interface RepoIssueGroup {
   issues: Issue[];
 }
 
+/** A single message in the chat transcript (user, AI, or system notice). */
 export interface ChatMessage {
   id: string;
   text: string;
@@ -37,6 +43,7 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+/** One numbered step in a contribution guide plan. */
 export interface ContributionStep {
   step: number;
   title: string;

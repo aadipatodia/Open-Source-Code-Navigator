@@ -1,19 +1,7 @@
-"""Open-Source Code Navigator API.
+"""FastAPI entry point — wires routers together, configures CORS, cleans up on shutdown.
 
-Helps someone find a project worth contributing to and understand it well enough
-to open a pull request. One module per job, each small enough to read in a sitting:
-
-- `core`           environment, logging, and the one call to Gemini
-- `dir_filter`     decide which directories in a clone are worth walking into
-- `repo_index`     clone a repository and map it into a file tree
-- `repo_evidence`  pick the files that matter for a task and quote them
-- `repo_guide`     turn that evidence into an onboarding guide
-- `issue_finder`   search for good first issues and plan one out
-- `code_analyzer`  explain and security-review a pasted snippet
-- `chat`           a programming assistant with a short memory
-
-Only the last five serve routes. This file wires them together and does nothing
-else; nothing here knows what any feature does.
+Each feature lives in its own module (repo_index, repo_guide, issue_finder,
+code_analyzer, chat). This file registers their routers and does nothing else.
 """
 
 import os
@@ -40,8 +28,8 @@ CORS_ORIGINS = [
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    """Clean up cloned repo temp directories when the server shuts down."""
     yield
-    # Every repository we cloned lives in a temp directory; take them with us.
     repo_index.clear_cache()
 
 
@@ -64,6 +52,7 @@ app.include_router(chat.router)
 
 @app.get("/")
 async def root():
+    """Health-check endpoint."""
     return {"message": "API is running."}
 
 

@@ -1,3 +1,4 @@
+// Root component — theme provider, auth/data contexts, route definitions, and the app shell.
 import React, { useState } from 'react';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
@@ -21,6 +22,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 
 import './App.css';
 
+/** Full-screen spinner shown while Firebase auth state resolves. */
 const LoadingScreen: React.FC = () => (
   <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
     <CircularProgress />
@@ -101,6 +103,7 @@ const AppShell: React.FC = () => {
   );
 };
 
+/** Top-level router — redirects unauthenticated users to /login. */
 const AppRoutes: React.FC = () => {
   const { user, authLoading } = useAuth();
   if (authLoading) return <LoadingScreen />;

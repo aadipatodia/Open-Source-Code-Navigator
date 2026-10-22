@@ -1,3 +1,4 @@
+// Shared UI primitives — useCopyToClipboard hook, IconTile, SectionHeader, MarkdownRenderer.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -7,6 +8,7 @@ import { alpha } from '@mui/material/styles';
 
 import { brand } from './theme';
 
+/** Copy text to clipboard and track which key was last copied (auto-resets). */
 export function useCopyToClipboard(resetAfterMs = 1500) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const timeoutRef = useRef<number | undefined>(undefined);
@@ -30,6 +32,7 @@ export function useCopyToClipboard(resetAfterMs = 1500) {
   return { copy, copiedKey };
 }
 
+/** Colored square (or circle) icon container used across section headers and cards. */
 export const IconTile: React.FC<{
   children: React.ReactNode;
   color: string;
@@ -53,6 +56,7 @@ export const IconTile: React.FC<{
   </Box>
 );
 
+/** Page section header with icon tile, eyebrow label, title, subtitle, and optional action. */
 export const SectionHeader: React.FC<{
   icon?: React.ReactNode;
   eyebrow?: string;
@@ -95,6 +99,7 @@ export const SectionHeader: React.FC<{
   </Box>
 );
 
+/** Render markdown with syntax-highlighted code blocks via react-markdown + Prism. */
 export const MarkdownRenderer: React.FC<{ content: string; className?: string }> = ({
   content,
   className = 'md-content',

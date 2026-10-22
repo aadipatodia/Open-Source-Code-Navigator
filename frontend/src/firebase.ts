@@ -1,3 +1,4 @@
+// Firebase initialization — exports the Auth instance for AuthContext.
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 

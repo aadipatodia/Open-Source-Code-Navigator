@@ -1,9 +1,7 @@
-"""Turn repository evidence into a contribution plan.
+"""Repo guide — generate a step-by-step onboarding plan for a repository.
 
-The endpoint here writes an onboarding guide for a repository as a whole.
-`issue_finder` writes the other kind, for a single issue, and shares the house
-style and the parser defined below - the frontend renders both as a list of
-numbered steps, which is what `parse_plan` produces.
+issue_finder reuses parse_plan() and the prompt style defined here so both
+guides (repo-wide and issue-specific) render the same way in the frontend.
 """
 
 import logging

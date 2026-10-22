@@ -1,10 +1,7 @@
-"""Find Issues: search GitHub for beginner-friendly work and plan one out.
+"""Issue finder — search GitHub for good-first-issue tickets and plan a contribution.
 
-Two steps of the same journey. First a skills search returns open
-`good first issue` tickets grouped by the project that owns them, then the user
-picks one and gets a step-by-step contribution plan for it. The plan is written
-from the same evidence and in the same house style as the repository guide, so
-the machinery for both comes from `repo_evidence` and `repo_guide`.
+Skills search returns open issues grouped by project; picking one generates a
+step-by-step plan using the same evidence and style as the repo guide.
 """
 
 import logging
@@ -151,6 +148,7 @@ def search_issues(skills: str) -> List[RepoIssueGroup]:
 
 
 def fetch_issue_body(repo_full_name: str, issue_number: int) -> str:
+    """Fetch the body text of a single GitHub issue by its number."""
     payload = github_get(f"/repos/{repo_full_name}/issues/{issue_number}", timeout=15)
     return payload.get("body") or "No description provided."
 
@@ -160,11 +158,13 @@ def fetch_issue_body(repo_full_name: str, issue_number: int) -> str:
 # --------------------------------------------------------------------------
 @router.post("/api/issues/find", response_model=List[RepoIssueGroup])
 async def find_issues(request: FindIssuesRequest):
+    """POST endpoint — return good-first-issue results grouped by repository."""
     return search_issues(request.skills)
 
 
 @router.post("/api/contribute/guide", response_model=GuidedContributionResponse)
 async def get_contribution_guide(request: GuidedContributionRequest):
+    """POST endpoint — generate a contribution plan for a specific issue."""
     repo_match = re.search(r"github\.com/([\w\-]+/[\w\-]+)", request.repoUrl)
     issue_match = re.search(r"/issues/(\d+)", request.issueUrl)
     if not repo_match or not issue_match:

@@ -1,11 +1,7 @@
-"""Decide which directories in a clone are not worth walking into.
+"""Directory filter — asks Gemini which directories are noise (deps, build output, caches).
 
-Every repository buries its own code among installed packages, build output and
-caches. Rather than match a list of names we happened to think of, we show the
-model what each directory actually holds and let it judge, which keeps working
-for stacks nobody here has seen.
-
-Used by `repo_index` while it walks a freshly cloned repository.
+Used by repo_index while walking a freshly cloned repo. Instead of a hardcoded
+ignore list, the model sees what each directory actually holds and decides.
 """
 
 import logging

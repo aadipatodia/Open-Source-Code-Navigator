@@ -1,3 +1,4 @@
+// Page components — one per route (Home, Explore, Issues, Analyze, Chat, Login, Signup).
 import React, { useMemo, useState } from 'react';
 import {
   Alert,
@@ -54,6 +55,7 @@ const CHAT_SUGGESTIONS = [
   'Give me a learning roadmap for contributing to Python libraries.',
 ];
 
+/** Dashboard with quick-action cards, recent analyses, and welcome banner. */
 export function HomePage() {
   const { recentAnalyses } = useAppData();
   const { user } = useAuth();
@@ -135,6 +137,7 @@ export function HomePage() {
   );
 }
 
+/** Recursively count file nodes in a tree (excludes directories). */
 function countFiles(items: FileItem[]): number {
   return items.reduce(
     (total, item) => total + (item.type === 'directory' ? countFiles(item.children || []) : 1),
@@ -142,6 +145,7 @@ function countFiles(items: FileItem[]): number {
   );
 }
 
+/** Repository explorer — URL input, file tree, and code viewer side-by-side. */
 export function ExplorePage() {
   const {
     repoUrl,
@@ -247,6 +251,7 @@ export function ExplorePage() {
   );
 }
 
+/** Issue finder — search by skills for good-first-issue tickets. */
 export function IssuesPage() {
   const { issueGroups, issuesLoading, issuesError, findIssues, openGuideForIssue } = useAppData();
   return (
@@ -268,6 +273,7 @@ export function IssuesPage() {
   );
 }
 
+/** Code analysis — paste a snippet for explanation and security review. */
 export function AnalyzePage() {
   const { addAnalysis } = useAppData();
   return (
@@ -283,6 +289,7 @@ export function AnalyzePage() {
   );
 }
 
+/** AI chat — full-height conversation interface with the programming mentor. */
 export function ChatPage() {
   const { chatMessages, chatLoading, chatTurns, askQuestion, clearChat } = useAppData();
   return (
@@ -308,6 +315,7 @@ export function ChatPage() {
   );
 }
 
+/** Shared login/signup form — mode prop switches between the two flows. */
 function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const navigate = useNavigate();
   const { user, login, signup, googleLogin } = useAuth();

@@ -1,8 +1,7 @@
-"""Analyze Code: explain a pasted snippet and review it for security problems.
+"""Code analyzer — explain a pasted snippet and flag security issues.
 
-The only feature that needs no repository. The model answers in two passes and
-marks a rewrite with a `Corrected Code:` line, which is what lets us split its
-reply into an explanation and a suggested fix.
+No repository needed. Gemini answers in two passes; a "Corrected Code:" marker
+lets us split the response into an explanation and an optional fix.
 """
 
 import re
@@ -30,6 +29,7 @@ class CodeExplanationResponse(BaseModel):
 
 @router.post("/api/explain/code", response_model=CodeExplanationResponse)
 async def explain_code(code: str = Form(...), context: str = Form("")):
+    """POST endpoint — return an explanation and optional corrected code for a snippet."""
     context_block = f"User-provided context:\n{context.strip()}\n\n" if context.strip() else ""
     prompt = f"""{context_block}Analyze the code below in two passes.
 

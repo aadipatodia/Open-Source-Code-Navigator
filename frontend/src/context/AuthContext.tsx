@@ -1,3 +1,4 @@
+// Auth context — wraps Firebase Auth and exposes login/signup/logout to the app.
 import React, {
   createContext,
   useCallback,
@@ -30,6 +31,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** Convert a Firebase user object into our app's User shape. */
 function mapFirebaseUser(fbUser: FirebaseUser): User {
   return {
     userId: fbUser.uid,
@@ -85,6 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
+/** Hook to access auth state and actions — must be inside <AuthProvider />. */
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within an <AuthProvider />");

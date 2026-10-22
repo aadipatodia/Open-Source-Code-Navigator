@@ -1,3 +1,4 @@
+// File explorer — filterable tree view of a cloned repository's file structure.
 import React, { useMemo, useState } from 'react';
 import {
   Box,
@@ -24,9 +25,7 @@ interface FileExplorerProps {
   selectedFile: FileItem | null;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers — filter the tree to items matching a query (keeping ancestors).
-// ---------------------------------------------------------------------------
+/** Filter the tree to items matching a query, keeping ancestor directories. */
 function filterTree(items: FileItem[], query: string): FileItem[] {
   if (!query) return items;
   const q = query.toLowerCase();
@@ -47,9 +46,6 @@ function filterTree(items: FileItem[], query: string): FileItem[] {
   return walk(items);
 }
 
-// ---------------------------------------------------------------------------
-// Tree node component
-// ---------------------------------------------------------------------------
 interface NodeProps {
   item: FileItem;
   level: number;
@@ -59,6 +55,7 @@ interface NodeProps {
   query: string;
 }
 
+/** Single row in the file tree — toggles open for directories, selects files. */
 const FileNode: React.FC<NodeProps> = ({
   item,
   level,
@@ -154,9 +151,7 @@ const FileNode: React.FC<NodeProps> = ({
   );
 };
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
+/** Searchable file tree with expand/collapse and file selection. */
 const FileExplorer: React.FC<FileExplorerProps> = ({ structure, onFileSelect, selectedFile }) => {
   const [query, setQuery] = useState('');
   const filtered = useMemo(() => filterTree(structure, query.trim()), [structure, query]);

@@ -1,3 +1,4 @@
+// Code input — paste a snippet, get an AI explanation and optional corrected code.
 import React, { useState } from 'react';
 import {
   Paper,
@@ -27,10 +28,8 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import { brand } from '../theme';
-import { apiClient, getApiError } from '../config/api';
-import { useCopyToClipboard } from '../ui';
-import { MarkdownRenderer } from '../ui';
-import { IconTile } from '../ui';
+import { apiClient, getApiError } from '../api';
+import { useCopyToClipboard, MarkdownRenderer, IconTile } from '../ui';
 
 interface AnalysisResponse {
   is_correct: boolean;
@@ -52,6 +51,7 @@ const SAMPLE_CODE = `def factorial(n)
 const SAMPLE_CONTEXT =
   'A Python function to calculate factorial. I think there might be a syntax error.';
 
+/** Form for pasting code, calling the analysis API, and displaying results. */
 const CodeInput: React.FC<CodeInputProps> = ({ onAnalysisComplete }) => {
   const [code, setCode] = useState('');
   const [context, setContext] = useState('');

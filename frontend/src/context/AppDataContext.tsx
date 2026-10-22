@@ -1,6 +1,7 @@
+// App data context — central state for repo explorer, issues, guides, chat, and analyses.
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 
-import { apiClient, getApiError } from '../config/api';
+import { apiClient, getApiError } from '../api';
 import {
   AnalysisHistoryItem,
   ChatMessage,
@@ -289,6 +290,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 };
 
+/** Hook to access all app-level state and actions — must be inside <AppDataProvider />. */
 export const useAppData = (): AppDataContextValue => {
   const ctx = useContext(AppDataContext);
   if (!ctx) throw new Error('useAppData must be used within an <AppDataProvider />');

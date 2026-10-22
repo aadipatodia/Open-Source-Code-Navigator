@@ -1,3 +1,4 @@
+// Repository URL input — text field with suggestion chips and an "Analyze" button.
 import React, { useState } from 'react';
 import {
   Paper,
@@ -33,6 +34,7 @@ const SUGGESTIONS = [
   'https://github.com/microsoft/vscode',
 ];
 
+/** Form for entering a GitHub repo URL, with quick-pick suggestions. */
 const RepositoryInput: React.FC<RepositoryInputProps> = ({
   onRepositorySelect,
   loading,

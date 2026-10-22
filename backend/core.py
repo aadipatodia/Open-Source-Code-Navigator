@@ -1,8 +1,7 @@
-"""Shared setup: environment, logging, and the one place we call Gemini.
+"""Shared setup — environment, logging, and the single Gemini API wrapper.
 
-Every feature module talks to Gemini, so the client lives here rather than in
-`main`. It cannot live in `main`, because `main` has to import the feature
-modules to register their routes, and they would have to import it back.
+Every feature module calls generate() from here. Keeps the API key, model name,
+and generation config in one place so nothing else touches google.generativeai.
 """
 
 import logging

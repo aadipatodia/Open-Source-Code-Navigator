@@ -1,3 +1,4 @@
+// Code viewer — syntax-highlighted file content with language detection and copy button.
 import React from 'react';
 import { Box, Typography, IconButton, Tooltip, Paper, Chip } from '@mui/material';
 import {
@@ -53,12 +54,14 @@ const LANGUAGE_MAP: Record<string, string> = {
   xml: 'xml',
 };
 
+/** Map a file extension to a Prism language name. */
 const resolveLanguage = (raw: string) => {
   if (!raw) return 'text';
   const lower = raw.toLowerCase();
   return LANGUAGE_MAP[lower] || lower;
 };
 
+/** Display a file's contents with line numbers, language chip, and copy action. */
 const CodebaseAnalysis: React.FC<CodebaseAnalysisProps> = ({
   content,
   language,

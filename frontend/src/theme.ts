@@ -1,9 +1,6 @@
+// MUI theme — brand palette (dark navy + violet/cyan) and component overrides.
 import { createTheme, alpha } from '@mui/material/styles';
 
-// ---------------------------------------------------------------------------
-// Brand palette — a calm dark navy with violet/cyan accents (Linear / Vercel-
-// inspired) instead of the previous neon-purple-everywhere look.
-// ---------------------------------------------------------------------------
 export const brand = {
   bg: '#07091a',
   surface: '#0f1330',

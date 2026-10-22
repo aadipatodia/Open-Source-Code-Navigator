@@ -1,8 +1,7 @@
-"""Clone a repository and map it into a file tree the rest of the app reads from.
+"""Repo index — clone a GitHub repo into a temp dir and build a browsable file tree.
 
-A clone lands in a temp directory and stays there, keyed by its URL, so the
-later steps - quoting source files, serving a file to the browser - never have
-to fetch it again. `main` empties the cache on shutdown.
+The clone is cached by URL so later steps (evidence gathering, file viewing)
+read from disk without re-cloning. main.py empties the cache on shutdown.
 """
 
 import asyncio
@@ -171,11 +170,13 @@ async def index_repository(repo_url: str) -> dict:
 
 @router.post("/api/analyze/repo", response_model=RepoAnalysisResponse)
 async def analyze_repo(request: AnalyzeRepoRequest):
+    """POST endpoint — clone and return the repo's file tree."""
     return await index_repository(request.repoUrl)
 
 
 @router.get("/api/repo/file_content")
 async def get_file_content(repo_url: str = Query(...), file_path: str = Query(...)):
+    """GET endpoint — return the UTF-8 text of a single file from a cached clone."""
     if repo_url not in repo_cache:
         raise HTTPException(404, "Repository not found or hasn't been analyzed yet.")
 

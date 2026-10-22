@@ -1,3 +1,4 @@
+// Guided contribution modal — shows a step-by-step plan for a repo or issue.
 import React from 'react';
 import {
   Modal,
@@ -39,6 +40,7 @@ interface GuidedContributionProps {
   repoUrl?: string;
 }
 
+/** Full-screen modal with accordion steps — works for both repo and issue guides. */
 const GuidedContribution: React.FC<GuidedContributionProps> = ({
   open,
   onClose,

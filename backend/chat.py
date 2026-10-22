@@ -1,8 +1,7 @@
-"""AI Chat: a programming assistant with a short, deliberate memory.
+"""AI chat — stateless programming assistant with a fixed conversation window.
 
-The browser owns the conversation window and replays it on every request, so
-this endpoint stays stateless and several tabs cannot interfere with each other.
-The limit below is the ceiling we enforce regardless of what a client sends.
+The client replays history on every request, so the server holds no session
+state. CHAT_HISTORY_TURNS caps how many turns we forward to Gemini.
 """
 
 import os
@@ -65,8 +64,7 @@ again' or 'do that for Python' against them instead of asking what was meant."""
 
 @router.post("/api/chat")
 async def chat_with_ai(request: ChatRequest):
-    # Each earlier turn is sent under its own role, so follow-up questions resolve
-    # against what was actually said rather than against a flattened transcript.
+    """POST endpoint — send a message with history, get a Gemini response."""
     contents = [
         {"role": "model" if turn.role == "ai" else "user", "parts": [turn.text]}
         for turn in request.history[-(CHAT_HISTORY_TURNS * 2) :]
