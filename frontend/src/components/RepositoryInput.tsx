@@ -16,7 +16,7 @@ import {
   LinkRounded,
   PlayArrowRounded,
 } from '@mui/icons-material';
-import { brand } from '../theme/theme';
+import { brand } from '../theme';
 
 export interface RepositoryInputProps {
   onRepositorySelect: (repoUrl: string) => Promise<void> | void;

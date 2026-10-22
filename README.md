@@ -17,12 +17,13 @@ generate step-by-step contribution plans — all powered by Google **Gemini 2.5 
 ## Architecture
 
 ```
-backend/          FastAPI service (main.py) — GitHub API, git cloning, and all Gemini calls
-frontend/         React + TypeScript single-page app (MUI)
-  src/components/ Reusable UI + one file per page
-  src/context/    AuthContext (Firebase) and AppDataContext (shared app state)
-  src/config/     Axios client and API error handling
-  src/types.ts    Shared TypeScript types
+backend/           FastAPI — GitHub API, git cloning, Gemini calls
+frontend/          React + TypeScript (MUI)
+  src/pages.tsx    Route screens (home, explore, issues, analyze, chat, auth)
+  src/components/  Feature widgets (chat, file tree, issue search, …)
+  src/ui.tsx       Shared UI (headers, markdown, icons)
+  src/context/     Firebase auth + shared app state
+  src/config/      API client
 ```
 
 The frontend keeps all server state in `AppDataContext` and talks to the backend through a single
@@ -71,14 +72,13 @@ npm start                          # serves on http://localhost:3000
 ```
 
 Sign-in uses Firebase Authentication (email/password or Google). Configure your Firebase project in
-`src/firebaseConfig.ts`.
+`src/firebase.ts`.
 
 ## Deployment
 
 ### Backend (Google Cloud Run)
 
-The backend runs as a container on [Cloud Run](https://cloud.google.com/run). The existing
-`backend/Dockerfile` is used as-is; Cloud Run sets `PORT` automatically.
+Deploy from source with [Cloud Run](https://cloud.google.com/run) (no local Docker required).
 
 **One-time setup**
 
@@ -109,41 +109,15 @@ access to them, and deploys with settings suited to this app:
 
 When it finishes, copy the service URL (e.g. `https://open-source-code-navigator-api-….run.app`).
 
-**CI/CD (optional)** — push builds via Cloud Build:
-
-```bash
-cd backend
-gcloud builds submit --config cloudbuild.yaml .
-```
-
-Create secrets `gemini-api-key` and `github-token` in Secret Manager first, or run
-`./deploy.sh` once so the script creates them.
-
-**Frontend** — on Vercel, set `REACT_APP_API_BASE` to your Cloud Run URL (no trailing slash)
-and redeploy. CORS already allows the production Vercel domain; add others with the
-`ALLOWED_ORIGINS` env var on the Cloud Run service.
+**Frontend (Vercel)** — Root Directory `frontend`, Install `npm install --legacy-peer-deps`,
+Build `npm run build`, Output `build`. Set `REACT_APP_API_BASE` to your Cloud Run URL (no trailing
+slash). CORS allows the production Vercel domain; add others with `ALLOWED_ORIGINS` on Cloud Run.
 
 **Notes**
 
-- Cloned repositories live in memory and on the container filesystem; they are lost when an
-  instance scales down or is replaced. That matches the current architecture.
-- To update secrets later:
-  `printf '%s' NEW_KEY | gcloud secrets versions add gemini-api-key --data-file=-`
-  then redeploy or restart revisions.
-
-### Backend (Render)
-
-Runtime `Docker`, Root Directory `backend`, Dockerfile `Dockerfile`. The
-Dockerfile pins Python 3.12, which avoids Render's default 3.14 breaking `pydantic-core`. Set
-`GEMINI_API_KEY` and `GITHUB_TOKEN`. If you deploy with the native Python runtime instead, also set
-`PYTHON_VERSION=3.12.8` and clear the build cache after changing it.
-
-### Frontend (Vercel)
-
-Root Directory `frontend`, Install `npm install --legacy-peer-deps`,
-Build `npm run build`, Output `build`. Set `REACT_APP_API_BASE` to your backend URL (Cloud Run or
-Render) with no trailing slash. CORS already allows the production Vercel domain and its preview
-URLs; add any others via the `ALLOWED_ORIGINS` environment variable on the backend.
+- Cloned repositories are cached in memory and are lost when an instance scales down.
+- Update secrets: `printf '%s' NEW_KEY | gcloud secrets versions add gemini-api-key --data-file=-`
+  then redeploy.
 
 ## Team
 

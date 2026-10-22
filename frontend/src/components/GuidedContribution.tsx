@@ -22,8 +22,8 @@ import {
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
 
-import { brand, brandGradient } from '../theme/theme';
-import MarkdownRenderer from './common/MarkdownRenderer';
+import { brand, brandGradient } from '../theme';
+import { MarkdownRenderer } from '../ui';
 import { ContributionStep } from '../types';
 
 interface GuidedContributionProps {

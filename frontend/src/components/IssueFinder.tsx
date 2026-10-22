@@ -21,9 +21,9 @@ import {
   ExpandMoreRounded,
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
-import { brand } from '../theme/theme';
+import { brand } from '../theme';
 import { Issue, RepoIssueGroup } from '../types';
-import IconTile from './common/IconTile';
+import { IconTile } from '../ui';
 
 interface IssueFinderProps {
   onFindIssues: (skills: string) => void | Promise<void>;

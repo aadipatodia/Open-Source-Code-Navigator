@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import { MenuRounded } from '@mui/icons-material';
 import { useLocation } from 'react-router-dom';
-import { brand } from '../theme/theme';
+import { brand } from '../theme';
 import { User } from '../types';
 
 interface TopBarProps {

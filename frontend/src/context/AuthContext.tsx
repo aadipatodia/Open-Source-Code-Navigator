@@ -16,7 +16,7 @@ import {
   User as FirebaseUser,
 } from "firebase/auth";
 
-import { auth } from "../firebaseClient";
+import { auth } from "../firebase";
 import { User } from "../types";
 
 type AuthContextValue = {

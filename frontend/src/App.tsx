@@ -3,16 +3,18 @@ import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { Box, CssBaseline, CircularProgress, useMediaQuery, Theme } from '@mui/material';
 
-import { appTheme } from './theme/theme';
+import { appTheme } from './theme';
 import Sidebar, { SIDEBAR_WIDTH } from './components/Sidebar';
 import TopBar from './components/TopBar';
-import HomePage from './components/pages/HomePage';
-import ExplorePage from './components/pages/ExplorePage';
-import IssuesPage from './components/pages/IssuesPage';
-import AnalyzePage from './components/pages/AnalyzePage';
-import ChatPage from './components/pages/ChatPage';
-import LoginPage from './components/pages/LoginPage';
-import SignupPage from './components/pages/SignupPage';
+import {
+  HomePage,
+  ExplorePage,
+  IssuesPage,
+  AnalyzePage,
+  ChatPage,
+  LoginPage,
+  SignupPage,
+} from './pages';
 import GuidedContribution from './components/GuidedContribution';
 import { AppDataProvider, useAppData } from './context/AppDataContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
