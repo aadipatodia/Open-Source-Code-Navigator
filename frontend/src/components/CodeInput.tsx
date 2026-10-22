@@ -26,11 +26,11 @@ import { alpha } from '@mui/material/styles';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-import { brand } from '../theme/theme';
+import { brand } from '../theme';
 import { apiClient, getApiError } from '../config/api';
-import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
-import MarkdownRenderer from './common/MarkdownRenderer';
-import IconTile from './common/IconTile';
+import { useCopyToClipboard } from '../ui';
+import { MarkdownRenderer } from '../ui';
+import { IconTile } from '../ui';
 
 interface AnalysisResponse {
   is_correct: boolean;

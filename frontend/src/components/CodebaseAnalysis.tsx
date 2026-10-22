@@ -9,8 +9,8 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { alpha } from '@mui/material/styles';
 
-import { brand } from '../theme/theme';
-import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
+import { brand } from '../theme';
+import { useCopyToClipboard } from '../ui';
 
 interface CodebaseAnalysisProps {
   content: string;

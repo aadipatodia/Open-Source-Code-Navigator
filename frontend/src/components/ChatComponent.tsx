@@ -20,9 +20,9 @@ import {
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
 
-import { brand, brandGradient } from '../theme/theme';
-import MarkdownRenderer from './common/MarkdownRenderer';
-import IconTile from './common/IconTile';
+import { brand, brandGradient } from '../theme';
+import { MarkdownRenderer } from '../ui';
+import { IconTile } from '../ui';
 import { ChatMessage } from '../types';
 
 interface ChatComponentProps {

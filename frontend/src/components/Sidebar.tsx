@@ -20,7 +20,7 @@ import {
 } from '@mui/icons-material';
 import { NavLink, useLocation } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
-import { brand, brandGradient } from '../theme/theme';
+import { brand, brandGradient } from '../theme';
 
 export const SIDEBAR_WIDTH = 248;
 
