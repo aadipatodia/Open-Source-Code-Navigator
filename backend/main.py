@@ -21,6 +21,7 @@ CORS_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:5173",
+    "https://code-scout.vercel.app",
     "https://open-source-code-navigator.vercel.app",
     *[o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()],
 ]
@@ -33,11 +34,11 @@ async def lifespan(_app: FastAPI):
     repo_index.clear_cache()
 
 
-app = FastAPI(title="Open-Source Code Navigator API", version="4.0.0", lifespan=lifespan)
+app = FastAPI(title="Code Scout API", version="4.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_origin_regex=r"https://open-source-code-navigator(-[a-z0-9-]+)?\.vercel\.app",
+    allow_origin_regex=r"https://(code-scout|open-source-code-navigator)(-[a-z0-9-]+)?\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

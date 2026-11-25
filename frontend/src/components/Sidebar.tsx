@@ -81,10 +81,10 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose, variant }) => {
                 WebkitTextFillColor: 'transparent',
               }}
             >
-              Code Navigator
+              Code Scout
             </Typography>
             <Typography variant="caption" sx={{ color: brand.textSubtle }}>
-              Open-source on-ramp
+              Explore open source
             </Typography>
           </Box>
         </Box>

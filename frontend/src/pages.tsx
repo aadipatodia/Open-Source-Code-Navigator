@@ -297,7 +297,7 @@ export function ChatPage() {
       <SectionHeader
         icon={<ChatBubbleRounded />}
         eyebrow="AI CHAT"
-        title="Ask the Code Navigator"
+        title="Ask Code Scout"
         subtitle="Open-source and programming questions only."
       />
       <Box sx={{ flex: 1, minHeight: 0 }}>

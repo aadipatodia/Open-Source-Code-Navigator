@@ -1,4 +1,4 @@
-# Open-Source Code Navigator
+# Code Scout
 
 An AI-powered tool for exploring and contributing to open-source projects. Paste a GitHub URL to
 browse a repository, find beginner-friendly issues, get code explained and security-reviewed, and
