@@ -315,6 +315,38 @@ export function ChatPage() {
   );
 }
 
+/** Turn a Firebase auth error into a message a person can act on. */
+function authErrorMessage(err: unknown, fallback: string): string {
+  const code = (err as { code?: string } | null)?.code ?? '';
+  switch (code) {
+    case 'auth/unauthorized-domain':
+      return `Sign-in isn't enabled for ${window.location.hostname} yet. Add this domain under Firebase → Authentication → Settings → Authorized domains.`;
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'Incorrect email or password.';
+    case 'auth/email-already-in-use':
+      return 'An account with this email already exists. Try logging in.';
+    case 'auth/weak-password':
+      return 'Password must be at least 6 characters.';
+    case 'auth/invalid-email':
+      return 'That email address looks invalid.';
+    case 'auth/popup-blocked':
+      return 'Your browser blocked the Google sign-in popup. Allow popups for this site and try again.';
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'Google sign-in was cancelled.';
+    case 'auth/operation-not-allowed':
+      return 'This sign-in method is turned off in Firebase.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Wait a moment and try again.';
+    case 'auth/network-request-failed':
+      return 'Network error. Check your connection and try again.';
+    default:
+      return err instanceof Error ? err.message : fallback;
+  }
+}
+
 /** Shared login/signup form — mode prop switches between the two flows. */
 function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const navigate = useNavigate();
@@ -339,7 +371,7 @@ function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
       else await signup(email.trim(), password);
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : isLogin ? 'Login failed.' : 'Sign up failed.');
+      setError(authErrorMessage(err, isLogin ? 'Login failed.' : 'Sign up failed.'));
     } finally {
       setSubmitting(false);
     }
@@ -352,7 +384,7 @@ function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
       await googleLogin();
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google sign-in failed.');
+      setError(authErrorMessage(err, 'Google sign-in failed.'));
     } finally {
       setGoogleSubmitting(false);
     }
