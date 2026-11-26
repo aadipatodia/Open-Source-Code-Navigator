@@ -29,7 +29,7 @@ class ChatRequest(BaseModel):
     history: List[ChatTurn] = []
 
 
-CHAT_SYSTEM_INSTRUCTION = """You are 'Code Navigator', an AI pair-programmer for people \
+CHAT_SYSTEM_INSTRUCTION = """You are 'Code Scout', an AI pair-programmer for people \
 exploring and contributing to open-source software. You are a specialist tool, not a \
 general-purpose assistant.
 
