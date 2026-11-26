@@ -51,7 +51,7 @@ PLAN_FORMAT_RULES = """## Output rules (the application parses this)
 5. Every code block must be complete and runnable as written: real imports, the symbol names actually used in the quoted files, no `# implement this here` placeholders, no pseudocode, and matching the style visible in the project. A "before" snippet must be the code as it really appears, not an approximation of it.
 6. Every verification step must name the observable result - the exact output, exit code, or on-screen change that means it worked - plus the most likely failure and what it would mean.
 7. The reader has the issue open already. Do not restate it; use the space to add what they cannot see for themselves.
-8. Use Markdown bullets, numbered lists, and fenced code blocks with language tags. Length is fine when it carries information; filler is not.
+8. Use Markdown bullets, numbered lists, and fenced code blocks with language tags. Use a table only when comparing several items across the same attributes, and write it as a GitHub-flavoured Markdown table: a blank line before it, a header row, a `| --- | --- |` divider row, one row per line, every row starting and ending with `|`, and no blank lines inside it. Never draw tables with underscores, dashes or ASCII art. Length is fine when it carries information; filler is not.
 9. Where the quoted source contradicts the request - the work already looks done, or the code does not behave as described - the source wins. Say so in the first section, quote the line that proves it, and plan from the code as it actually is. Never reconstruct a "before" state to match the description."""
 
 

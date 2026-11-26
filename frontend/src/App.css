@@ -150,26 +150,107 @@
   color: inherit;
 }
 
+.md-content .md-codeblock code {
+  display: block;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  white-space: pre;
+}
+
 .md-content li > code,
 .md-content p > code {
   vertical-align: baseline;
 }
 
+.md-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin: 0.9em 0 1.1em;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(15, 19, 48, 0.6);
+}
+
 .md-content table {
   border-collapse: collapse;
   width: 100%;
-  margin: 0.6em 0;
-  font-size: 0.9rem;
+  min-width: 480px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.md-content thead th {
+  background: rgba(124, 92, 255, 0.14);
+  color: #ffffff;
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(124, 92, 255, 0.35);
 }
 
 .md-content th,
 .md-content td {
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  padding: 0.45em 0.7em;
+  padding: 0.6em 0.9em;
   text-align: left;
+  vertical-align: top;
+  border-right: 1px solid rgba(148, 163, 184, 0.1);
 }
 
-.md-content th {
-  background: rgba(148, 163, 184, 0.08);
-  color: #ffffff;
+.md-content th:last-child,
+.md-content td:last-child {
+  border-right: 0;
 }
+
+.md-content tbody tr + tr td {
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.md-content tbody tr:nth-child(even) td {
+  background: rgba(148, 163, 184, 0.04);
+}
+
+.md-content tbody tr:hover td {
+  background: rgba(124, 92, 255, 0.07);
+}
+
+.md-content td code,
+.md-content th code {
+  white-space: nowrap;
+}
+
+.md-content hr {
+  border: 0;
+  height: 1px;
+  margin: 1.4em 0;
+  background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.3), transparent);
+}
+
+.md-content h4 { font-size: 0.98rem; color: #e9e6ff; }
+
+.md-content h2,
+.md-content h3 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.md-content > :first-child { margin-top: 0; }
+.md-content > :last-child { margin-bottom: 0; }
+
+.md-content li::marker { color: #8b7bff; }
+
+.md-content ol > li::marker { font-weight: 600; }
+
+.md-content li > p { margin: 0.2em 0; }
+
+.md-content ul.contains-task-list {
+  list-style: none;
+  padding-left: 0.2rem;
+}
+
+.md-content .task-list-item input[type='checkbox'] {
+  margin-right: 0.5em;
+  accent-color: #7c5cff;
+}
+
+.md-content del { color: #8a90ad; }

@@ -1,6 +1,7 @@
 // Shared UI primitives — useCopyToClipboard hook, IconTile, SectionHeader, MarkdownRenderer.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Box, Typography } from '@mui/material';
@@ -99,14 +100,65 @@ export const SectionHeader: React.FC<{
   </Box>
 );
 
-/** Render markdown with syntax-highlighted code blocks via react-markdown + Prism. */
+const TABLE_ROW_RE = /^\s*\|.*\|\s*$/;
+const TABLE_DIVIDER_RE = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+
+/**
+ * Clean up the table markdown models tend to produce so remark-gfm can parse it:
+ * put a blank line before each table, and drop blank lines that split a table in two.
+ * Lines inside fenced code blocks are left alone.
+ */
+export function normalizeMarkdown(markdown: string): string {
+  const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
+  const out: string[] = [];
+  let inFence = false;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+    if (inFence) {
+      out.push(line);
+      continue;
+    }
+
+    const startsTable = TABLE_ROW_RE.test(line) && TABLE_DIVIDER_RE.test(lines[i + 1] ?? '');
+    const prev = out[out.length - 1];
+    if (startsTable && prev !== undefined && prev.trim() !== '' && !TABLE_ROW_RE.test(prev)) {
+      out.push('');
+    }
+
+    // A blank line between two table rows ends the table early; skip it.
+    if (line.trim() === '' && prev !== undefined && TABLE_ROW_RE.test(prev) && TABLE_ROW_RE.test(lines[i + 1] ?? '')) {
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
+/** Render markdown (GitHub-flavoured: tables, task lists) with Prism-highlighted code blocks. */
 export const MarkdownRenderer: React.FC<{ content: string; className?: string }> = ({
   content,
   className = 'md-content',
 }) => (
   <Box className={className}>
     <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
       components={{
+        table({ children }) {
+          return (
+            <div className="md-table-wrap">
+              <table>{children}</table>
+            </div>
+          );
+        },
+        a({ children, href }) {
+          return (
+            <a href={href} target="_blank" rel="noreferrer">
+              {children}
+            </a>
+          );
+        },
         pre({ children }) {
           return <>{children}</>;
         },
@@ -131,6 +183,7 @@ export const MarkdownRenderer: React.FC<{ content: string; className?: string }>
               language={language}
               style={vscDarkPlus as any}
               PreTag="div"
+              className="md-codeblock"
               customStyle={{
                 margin: 0,
                 borderRadius: 12,
@@ -147,7 +200,7 @@ export const MarkdownRenderer: React.FC<{ content: string; className?: string }>
         },
       }}
     >
-      {content}
+      {normalizeMarkdown(content)}
     </ReactMarkdown>
   </Box>
 );

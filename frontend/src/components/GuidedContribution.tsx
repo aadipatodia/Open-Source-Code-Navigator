@@ -1,5 +1,5 @@
 // Guided contribution modal — shows a step-by-step plan for a repo or issue.
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal,
   Box,
@@ -13,6 +13,7 @@ import {
   Stack,
   Chip,
   Button,
+  Skeleton,
 } from '@mui/material';
 import {
   CloseRounded,
@@ -20,6 +21,9 @@ import {
   AutoAwesomeRounded,
   LaunchRounded,
   GitHub,
+  LightbulbRounded,
+  UnfoldMoreRounded,
+  UnfoldLessRounded,
 } from '@mui/icons-material';
 import { alpha } from '@mui/material/styles';
 
@@ -54,6 +58,24 @@ const GuidedContribution: React.FC<GuidedContributionProps> = ({
   repoUrl,
 }) => {
   const isRepoMode = mode === 'repo';
+  const [expanded, setExpanded] = useState<Set<number>>(new Set([0]));
+
+  // Open the first step whenever a new plan arrives.
+  useEffect(() => {
+    setExpanded(new Set([0]));
+  }, [plan]);
+
+  const steps = plan ?? [];
+  const allOpen = steps.length > 0 && expanded.size === steps.length;
+  const toggleStep = (index: number) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  const toggleAll = () => setExpanded(allOpen ? new Set() : new Set(steps.map((_, i) => i)));
+
   const chipLabel = isRepoMode ? 'Repo Contribution Guide' : 'AI Contribution Plan';
   const title = isRepoMode
     ? `How to contribute to ${repoName || 'this repo'}`
@@ -169,70 +191,123 @@ const GuidedContribution: React.FC<GuidedContributionProps> = ({
           }}
         >
           {loading && (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                py: 8,
-                gap: 2,
-              }}
-            >
-              <CircularProgress />
-              <Typography sx={{ color: brand.textMuted, textAlign: 'center' }}>
-                {isRepoMode
-                  ? 'Generating your repo contribution guide…'
-                  : 'Generating your personalized contribution plan…'}
-              </Typography>
-              <Typography variant="caption" sx={{ color: brand.textSubtle, textAlign: 'center' }}>
-                {isRepoMode
-                  ? 'Analyzing the repo structure and generating onboarding steps.'
-                  : 'This involves cloning the repo and asking AI for a step-by-step roadmap.'}
-              </Typography>
+            <Box sx={{ py: 2 }}>
+              <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+                <CircularProgress size={22} />
+                <Box>
+                  <Typography sx={{ color: brand.text, fontWeight: 600 }}>
+                    {isRepoMode
+                      ? 'Generating your repo contribution guide…'
+                      : 'Generating your personalized contribution plan…'}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: brand.textSubtle }}>
+                    {isRepoMode
+                      ? 'Reading the repo structure and writing onboarding steps. This can take a minute.'
+                      : 'Cloning the repo and working out a step-by-step roadmap. This can take a minute.'}
+                  </Typography>
+                </Box>
+              </Stack>
+              {[0, 1, 2, 3].map((i) => (
+                <Stack key={i} direction="row" spacing={2} sx={{ mb: 2 }}>
+                  <Skeleton variant="circular" width={32} height={32} sx={{ flexShrink: 0 }} />
+                  <Box sx={{ flex: 1 }}>
+                    <Skeleton variant="text" width={`${55 - i * 8}%`} height={28} />
+                    <Skeleton variant="rounded" height={i === 0 ? 90 : 44} sx={{ mt: 0.5 }} />
+                  </Box>
+                </Stack>
+              ))}
             </Box>
           )}
 
           {error && <Alert severity="error">{error}</Alert>}
 
-          {!loading && !error && plan && plan.length > 0 && (
+          {!loading && !error && steps.length > 0 && (
             <Box>
-              {plan.map((step, index) => (
-                <Accordion key={step.step ?? index} defaultExpanded={index === 0}>
-                  <AccordionSummary
-                    expandIcon={<ExpandMoreRounded sx={{ color: brand.textMuted }} />}
-                  >
-                    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+                <Typography variant="body2" sx={{ color: brand.textMuted }}>
+                  {steps.length} {steps.length === 1 ? 'section' : 'sections'}
+                </Typography>
+                <Button
+                  size="small"
+                  onClick={toggleAll}
+                  startIcon={allOpen ? <UnfoldLessRounded /> : <UnfoldMoreRounded />}
+                  sx={{ color: brand.textMuted }}
+                >
+                  {allOpen ? 'Collapse all' : 'Expand all'}
+                </Button>
+              </Stack>
+
+              {steps.map((step, index) => {
+                const isFinal = step.title.trim().toLowerCase() === 'final advice';
+                const isOpen = expanded.has(index);
+                const isLast = index === steps.length - 1;
+                const accent = isFinal ? brand.warning : brand.primary;
+                return (
+                  <Box key={`${step.step}-${index}`} sx={{ display: 'flex', gap: { xs: 1.25, sm: 2 }, pb: isLast ? 0 : 1.5 }}>
+                    {/* Timeline rail */}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 1.5 }}>
                       <Box
                         sx={{
-                          minWidth: 28,
-                          height: 28,
+                          width: 32,
+                          height: 32,
                           borderRadius: '50%',
                           display: 'grid',
                           placeItems: 'center',
-                          background: brandGradient,
+                          flexShrink: 0,
                           color: '#fff',
                           fontWeight: 700,
                           fontSize: '0.85rem',
-                          flexShrink: 0,
+                          background: isFinal ? alpha(brand.warning, 0.9) : brandGradient,
+                          boxShadow: isOpen ? `0 0 0 4px ${alpha(accent, 0.18)}` : 'none',
+                          transition: 'box-shadow 0.2s',
                         }}
                       >
-                        {step.step ?? index + 1}
+                        {isFinal ? <LightbulbRounded sx={{ fontSize: 18 }} /> : step.step ?? index + 1}
                       </Box>
-                      <Typography sx={{ fontWeight: 700, color: brand.text }}>
-                        {step.title}
-                      </Typography>
-                    </Stack>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <MarkdownRenderer content={step.details} />
-                  </AccordionDetails>
-                </Accordion>
-              ))}
+                      {!isLast && (
+                        <Box sx={{ flex: 1, width: 2, mt: 1, mb: -1.5, minHeight: 16, bgcolor: alpha(brand.primary, 0.22), borderRadius: 1 }} />
+                      )}
+                    </Box>
+
+                    {/* Step card */}
+                    <Accordion
+                      expanded={isOpen}
+                      onChange={() => toggleStep(index)}
+                      TransitionProps={{ unmountOnExit: true }}
+                      sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        mb: 0,
+                        '&.Mui-expanded': { mb: 0 },
+                        borderColor: isOpen ? alpha(accent, 0.45) : brand.border,
+                        backgroundColor: isFinal ? alpha(brand.warning, 0.05) : undefined,
+                        transition: 'border-color 0.2s',
+                      }}
+                    >
+                      <AccordionSummary expandIcon={<ExpandMoreRounded sx={{ color: brand.textMuted }} />}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography
+                            variant="overline"
+                            sx={{ color: isFinal ? brand.warning : brand.secondary, lineHeight: 1.4, letterSpacing: '0.08em' }}
+                          >
+                            {isFinal ? 'Wrap-up' : `Step ${step.step ?? index + 1}`}
+                          </Typography>
+                          <Typography sx={{ fontWeight: 700, color: brand.text, fontSize: '1.02rem', lineHeight: 1.35 }}>
+                            {step.title}
+                          </Typography>
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails sx={{ pt: 2.5, px: { xs: 2, sm: 3 }, pb: 3 }}>
+                        <MarkdownRenderer content={step.details} />
+                      </AccordionDetails>
+                    </Accordion>
+                  </Box>
+                );
+              })}
             </Box>
           )}
 
-          {!loading && !error && plan && plan.length === 0 && (
+          {!loading && !error && plan && steps.length === 0 && (
             <Alert severity="info">No plan was returned. Try a different issue.</Alert>
           )}
         </Box>
