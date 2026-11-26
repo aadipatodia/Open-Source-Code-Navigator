@@ -1,4 +1,4 @@
-"""Shared fixtures. No test calls Gemini or GitHub: both are replaced by stand-ins."""
+"""Shared set-up for the tests. No test calls Gemini or GitHub."""
 
 import os
 import sys
@@ -12,21 +12,21 @@ import repo_index  # noqa: E402
 
 
 @pytest.fixture
-def fake_repo(tmp_path):
-    """A small checkout registered in the clone cache, as if it had been analysed."""
-    root = tmp_path / "clone"
-    (root / "src").mkdir(parents=True)
-    (root / "src" / "app.py").write_text("print('hello')\n")
-    (root / "README.md").write_text("# demo\n")
-    url = "https://github.com/demo/repo"
-    repo_index.repo_cache[url] = {"path": str(root), "analysis": {}}
-    yield url, root
+def fake_project(tmp_path):
+    """A small downloaded project, registered as if Code Scout had analysed it."""
+    project = tmp_path / "project"
+    (project / "src").mkdir(parents=True)
+    (project / "src" / "app.py").write_text("print('hello')\n")
+    (project / "README.md").write_text("# demo\n")
+    url = "https://github.com/demo/project"
+    repo_index.repo_cache[url] = {"path": str(project), "analysis": {}}
+    yield url, project
     repo_index.repo_cache.pop(url, None)
 
 
 @pytest.fixture
-def client():
-    """A client whose requests count as signed in, for testing the routes themselves."""
+def signed_in_client():
+    """A test client whose requests count as coming from a signed-in user."""
     from fastapi.testclient import TestClient
     import main
     from auth import require_user
@@ -34,13 +34,3 @@ def client():
     main.app.dependency_overrides[require_user] = lambda: {"sub": "test-user"}
     yield TestClient(main.app)
     main.app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def anon_client():
-    """A client that sends no sign-in token at all."""
-    from fastapi.testclient import TestClient
-    import main
-
-    main.app.dependency_overrides.clear()
-    return TestClient(main.app)

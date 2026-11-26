@@ -4,6 +4,7 @@ issue_finder reuses parse_plan() and the prompt style defined here so both
 guides (repo-wide and issue-specific) render the same way in the frontend.
 """
 
+import asyncio
 import logging
 import re
 from typing import List
@@ -57,15 +58,19 @@ PLAN_FORMAT_RULES = """## Output rules (the application parses this)
 
 def parse_plan(response: str) -> List[ContributionStep]:
     """Split a Gemini plan into steps, falling back to one step holding the raw text."""
+    response = response.replace("\r\n", "\n")
+    # Tolerate stray spaces around the heading, which models add now and then.
     sections = re.findall(
-        r"\*\*Step \d+: (.+?)\*\*\n(.*?)(?=\n\*\*Step|\n\*\*Final|\Z)", response, re.DOTALL
+        r"^[ \t]*\*\*Step \d+:[ \t]*(.+?)\*\*[ \t]*\n(.*?)(?=\n[ \t]*\*\*Step \d+:|\n[ \t]*\*\*Final Advice|\Z)",
+        response,
+        re.DOTALL | re.MULTILINE,
     )
     plan = [
         ContributionStep(step=index + 1, title=title.strip(), details=details.strip())
         for index, (title, details) in enumerate(sections)
     ]
 
-    final_advice = re.search(r"\*\*Final Advice\*\*\n(.*)", response, re.DOTALL)
+    final_advice = re.search(r"^[ \t]*\*\*Final Advice\*\*[ \t]*\n(.*)", response, re.DOTALL | re.MULTILINE)
     if final_advice:
         plan.append(
             ContributionStep(step=len(plan) + 1, title="Final Advice", details=final_advice.group(1).strip())
@@ -131,4 +136,5 @@ The real test, lint, type-check, and format commands, inferred from the tooling 
 4-6 bullets specific to this project rather than generic contribution etiquette: where its maintainers talk, what this codebase's reviewers are likely to be picky about, which areas are safe for a newcomer and which are load-bearing, and the fastest way to build real familiarity with it."""
 
     logger.info("Generating repo contribution guide for: %s", request.repoUrl)
-    return GuidedContributionResponse(plan=parse_plan(generate(prompt, PLAN_SYSTEM_INSTRUCTION)))
+    reply = await asyncio.to_thread(generate, prompt, PLAN_SYSTEM_INSTRUCTION)
+    return GuidedContributionResponse(plan=parse_plan(reply))

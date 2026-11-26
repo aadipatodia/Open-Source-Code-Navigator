@@ -4,6 +4,7 @@ No repository needed. Gemini answers in two passes; a "Corrected Code:" marker
 lets us split the response into an explanation and an optional fix.
 """
 
+import asyncio
 import re
 from typing import Optional
 
@@ -13,6 +14,9 @@ from pydantic import BaseModel
 from core import generate
 
 router = APIRouter(tags=["code"])
+
+# "Corrected Code:" alone on its line, allowing bold markers or a heading hash around it.
+CORRECTED_MARKER_RE = re.compile(r"^[ \t#*]*Corrected Code:[ \t*]*$", re.MULTILINE)
 
 REVIEW_SYSTEM_INSTRUCTION = (
     "You are a senior software engineer and application-security reviewer. "
@@ -59,11 +63,18 @@ Code:
 {code}
 ```"""
 
-    response = generate(prompt, REVIEW_SYSTEM_INSTRUCTION)
+    response = await asyncio.to_thread(generate, prompt, REVIEW_SYSTEM_INSTRUCTION)
     if "Corrected Code:" not in response:
         return CodeExplanationResponse(is_correct=True, explanation=response)
 
-    explanation, _, corrected = response.partition("Corrected Code:")
+    # The marker is written on a line of its own; the phrase may also appear inside the
+    # explanation, so split at the last line that is just the marker.
+    markers = list(CORRECTED_MARKER_RE.finditer(response))
+    if markers:
+        cut = markers[-1]
+        explanation, corrected = response[: cut.start()], response[cut.end() :]
+    else:
+        explanation, _, corrected = response.rpartition("Corrected Code:")
     corrected = re.sub(r"^```[a-zA-Z0-9_+\-]*\n?", "", corrected.strip())
     corrected = re.sub(r"```\s*$", "", corrected).strip()
     return CodeExplanationResponse(

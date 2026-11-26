@@ -31,6 +31,19 @@ CLONE_SEMAPHORE = asyncio.Semaphore(int(os.getenv("CLONE_CONCURRENCY", "2")))
 # repo_url -> {"path": <temp dir>, "analysis": <RepoAnalysisResponse payload>}
 repo_cache: dict = {}
 
+# repo_url -> the task currently cloning it, so simultaneous requests share one clone.
+_in_flight: dict = {}
+
+# Every clone lives under one folder, so clones left behind by a killed process can be
+# found and deleted when the server next starts.
+CLONE_ROOT = os.path.join(tempfile.gettempdir(), "code-scout-clones")
+
+
+def reset_clone_root() -> None:
+    """Delete clones a previous process left behind and start with an empty folder."""
+    shutil.rmtree(CLONE_ROOT, ignore_errors=True)
+    os.makedirs(CLONE_ROOT, exist_ok=True)
+
 
 class FileItem(BaseModel):
     name: str
@@ -67,7 +80,8 @@ def list_directory(directory: str, repo_root: str) -> List[FileItem]:
     items: List[FileItem] = []
     for name in names:
         full_path = os.path.join(directory, name)
-        is_directory = os.path.isdir(full_path)
+        # A symbolic link to a directory could lead outside the clone, so it is never expanded.
+        is_directory = os.path.isdir(full_path) and not os.path.islink(full_path)
         items.append(
             FileItem(
                 name=name,
@@ -139,15 +153,27 @@ async def index_repository(repo_url: str) -> dict:
     if repo_url in repo_cache:
         return repo_cache[repo_url]["analysis"]
 
+    # If this repository is already being cloned, wait for that clone instead of starting another.
+    task = _in_flight.get(repo_url)
+    if task is None:
+        task = asyncio.ensure_future(_clone_and_index(repo_url))
+        _in_flight[repo_url] = task
+        task.add_done_callback(lambda _: _in_flight.pop(repo_url, None))
+    return await asyncio.shield(task)
+
+
+async def _clone_and_index(repo_url: str) -> dict:
+    """Clone one repository and build its tree. Only ever runs once per URL at a time."""
     async with CLONE_SEMAPHORE:
-        # Another request may have finished cloning while we waited for the slot.
         if repo_url in repo_cache:
             return repo_cache[repo_url]["analysis"]
 
-        temp_dir = tempfile.mkdtemp()
+        os.makedirs(CLONE_ROOT, exist_ok=True)
+        temp_dir = tempfile.mkdtemp(dir=CLONE_ROOT)
         logger.info("Cloning %s", repo_url)
         try:
-            repo = git.Repo.clone_from(repo_url, temp_dir, depth=1)
+            # Cloning is slow network work, so keep it off the event loop.
+            repo = await asyncio.to_thread(git.Repo.clone_from, repo_url, temp_dir, depth=1)
             # Git names its own metadata directory, so we never have to guess at it.
             dir_filter = DirectoryFilter({os.path.basename(os.path.normpath(repo.git_dir))})
 
@@ -180,8 +206,9 @@ async def get_file_content(repo_url: str = Query(...), file_path: str = Query(..
     if repo_url not in repo_cache:
         raise HTTPException(404, "Repository not found or hasn't been analyzed yet.")
 
-    repo_root = os.path.abspath(repo_cache[repo_url]["path"])
-    full_path = os.path.abspath(os.path.join(repo_root, file_path))
+    # realpath follows symbolic links, so a link pointing outside the clone is caught here.
+    repo_root = os.path.realpath(repo_cache[repo_url]["path"])
+    full_path = os.path.realpath(os.path.join(repo_root, file_path))
     if os.path.commonpath([full_path, repo_root]) != repo_root:
         raise HTTPException(403, "File path is outside the repository bounds.")
     if not os.path.isfile(full_path):

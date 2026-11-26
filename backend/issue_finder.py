@@ -4,6 +4,7 @@ Skills search returns open issues grouped by project; picking one generates a
 step-by-step plan using the same evidence and style as the repo guide.
 """
 
+import asyncio
 import logging
 import os
 import re
@@ -159,7 +160,8 @@ def fetch_issue_body(repo_full_name: str, issue_number: int) -> str:
 @router.post("/api/issues/find", response_model=List[RepoIssueGroup])
 async def find_issues(request: FindIssuesRequest):
     """POST endpoint — return good-first-issue results grouped by repository."""
-    return search_issues(request.skills)
+    # GitHub calls are blocking network I/O; run them in a thread so other users are not held up.
+    return await asyncio.to_thread(search_issues, request.skills)
 
 
 @router.post("/api/contribute/guide", response_model=GuidedContributionResponse)
@@ -170,7 +172,9 @@ async def get_contribution_guide(request: GuidedContributionRequest):
     if not repo_match or not issue_match:
         raise HTTPException(400, "Invalid repository or issue URL.")
 
-    issue_body = request.issueBody.strip() or fetch_issue_body(repo_match.group(1), int(issue_match.group(1)))
+    issue_body = request.issueBody.strip() or await asyncio.to_thread(
+        fetch_issue_body, repo_match.group(1), int(issue_match.group(1))
+    )
     tree, sources = await gather_evidence(request.repoUrl, f"{request.issueTitle}\n\n{issue_body}")
 
     prompt = f"""Write the contribution plan for the GitHub issue below.
@@ -222,4 +226,5 @@ The project's real test, lint, and type-check commands, inferred from its toolin
 4-6 bullets, each one specific to this project or this change rather than generic contribution etiquette: the review conventions this repository appears to follow, where its maintainers discuss work, which part of this change is most likely to draw review comments and how to pre-empt it, and how to split the work into commits that tell a story."""
 
     logger.info("Generating contribution guide for: %s", request.issueTitle)
-    return GuidedContributionResponse(plan=parse_plan(generate(prompt, PLAN_SYSTEM_INSTRUCTION)))
+    reply = await asyncio.to_thread(generate, prompt, PLAN_SYSTEM_INSTRUCTION)
+    return GuidedContributionResponse(plan=parse_plan(reply))

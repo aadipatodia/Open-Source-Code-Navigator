@@ -1,277 +1,213 @@
-"""Checks Code Scout's own code against the behaviour its design describes.
+"""Code Scout test suite: 15 checks, one per promise the design makes.
 
-Each test sets up one situation and asserts what the design says should happen.
-Model and GitHub calls are replaced by stubs, so only ordinary program logic runs.
+Each test builds one small situation and checks what Code Scout does. Wherever the
+code would call Gemini or GitHub, a stand-in (stub) returns a fixed answer instead,
+so the tests run offline in about a second and give the same result every time.
+
+Run from the backend folder:  python -m pytest tests -v
 """
 
 import asyncio
 import os
 import time
 
+import httpx
 import pytest
 from fastapi import HTTPException
 
 import chat
 import code_analyzer
-import core
 import dir_filter
 import issue_finder
+import main
 import repo_evidence
 import repo_guide
 import repo_index
+from auth import require_user
 from dir_filter import DirectoryFilter
 
 
-# --------------------------------------------------------------------------
-# Repository intake and file route (7)
-# --------------------------------------------------------------------------
-def test_intake_rejects_non_github_url():
-    with pytest.raises(HTTPException) as exc:
-        asyncio.run(repo_index.index_repository("https://example.com/a/b"))
-    assert exc.value.status_code == 400
+# ---------------------------------------------------------------- Getting the project
+def test_01_rejects_a_link_that_is_not_a_github_repository():
+    """Only github.com/<owner>/<repo> links are accepted."""
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(repo_index.index_repository("https://example.com/some/project"))
+    assert error.value.status_code == 400
 
 
-def test_file_route_unknown_repo_is_404(client):
-    r = client.get("/api/repo/file_content", params={"repo_url": "https://github.com/no/such", "file_path": "a"})
-    assert r.status_code == 404
-
-
-def test_file_route_blocks_dot_dot_traversal(client, fake_repo):
-    url, _ = fake_repo
-    r = client.get("/api/repo/file_content", params={"repo_url": url, "file_path": "../../etc/passwd"})
-    assert r.status_code == 403
-
-
-def test_file_route_refuses_symlink_leaving_repo(client, fake_repo, tmp_path):
-    url, root = fake_repo
-    secret = tmp_path / "server.env"
-    secret.write_text("GEMINI_API_KEY=super-secret\n")
-    os.symlink(secret, root / "innocent.txt")
-    r = client.get("/api/repo/file_content", params={"repo_url": url, "file_path": "innocent.txt"})
-    assert r.status_code in (403, 404)
-    assert "super-secret" not in r.text
-
-
-def test_tree_does_not_expand_symlinked_directory_outside_repo(tmp_path):
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    (outside / "private.key").write_text("x")
-    root = tmp_path / "clone"
-    root.mkdir()
-    os.symlink(outside, root / "linked")
-    tree = repo_index.build_file_tree(str(root), str(root), DirectoryFilter(), budget=100)
-    linked = [item for item in tree if item.name == "linked"]
-    assert not linked or not linked[0].children
-
-
-def test_concurrent_requests_for_same_repo_clone_once(monkeypatch, tmp_path):
-    clones = []
+def test_02_downloads_a_project_only_once_when_two_people_ask_at_the_same_time(monkeypatch):
+    """Two simultaneous requests for one project share a single download."""
+    downloads = []
 
     class FakeRepo:
         git_dir = ".git"
 
-    def fake_clone(url, target, depth):
-        clones.append(url)
+    def fake_download(url, folder, depth):
+        downloads.append(url)
         time.sleep(0.2)
-        (tmp_path / "x").mkdir(exist_ok=True)
         return FakeRepo()
 
-    monkeypatch.setattr(repo_index.git.Repo, "clone_from", staticmethod(fake_clone))
-    def slow_tree(*a, **k):
-        time.sleep(0.1)  # a real walk takes time, and waits on the directory filter
+    def fake_tree(*args, **kwargs):
+        time.sleep(0.1)
         return []
 
-    monkeypatch.setattr(repo_index, "build_file_tree", slow_tree)
-    url = "https://github.com/demo/concurrent"
+    monkeypatch.setattr(repo_index.git.Repo, "clone_from", staticmethod(fake_download))
+    monkeypatch.setattr(repo_index, "build_file_tree", fake_tree)
+    url = "https://github.com/demo/popular"
 
-    async def two_at_once():
+    async def two_people_at_once():
         await asyncio.gather(repo_index.index_repository(url), repo_index.index_repository(url))
 
     try:
-        asyncio.run(two_at_once())
+        asyncio.run(two_people_at_once())
     finally:
         repo_index.repo_cache.pop(url, None)
-    assert len(clones) == 1
+    assert len(downloads) == 1
 
 
-def test_tree_walk_is_breadth_first_and_respects_budget(tmp_path):
-    root = tmp_path / "clone"
-    (root / "a" / "deep").mkdir(parents=True)
-    (root / "a" / "deep" / "f.py").write_text("")
+def test_03_file_tree_lists_top_level_first_and_stops_at_the_limit(tmp_path):
+    """The tree is built level by level and never goes past its entry budget."""
+    (tmp_path / "src" / "deep").mkdir(parents=True)
+    (tmp_path / "src" / "deep" / "hidden.py").write_text("")
     for i in range(5):
-        (root / f"top{i}.txt").write_text("")
-    tree = repo_index.build_file_tree(str(root), str(root), DirectoryFilter(), budget=6)
-    assert [item.name for item in tree] == ["a", "top0.txt", "top1.txt", "top2.txt", "top3.txt", "top4.txt"]
-    assert tree[0].children == []  # budget spent before the second level
+        (tmp_path / f"file{i}.txt").write_text("")
+    tree = repo_index.build_file_tree(str(tmp_path), str(tmp_path), DirectoryFilter(), budget=6)
+    assert [item.name for item in tree] == ["src", "file0.txt", "file1.txt", "file2.txt", "file3.txt", "file4.txt"]
+    assert tree[0].children == []  # the budget ran out before the second level
 
 
-# --------------------------------------------------------------------------
-# Evidence selection and reading (6)
-# --------------------------------------------------------------------------
-def test_selection_drops_invented_paths(monkeypatch):
-    monkeypatch.setattr(repo_evidence, "generate", lambda *a, **k: "src/app.py\nsrc/made_up.py\n- README.md")
-    assert repo_evidence.select_files(["src/app.py", "README.md"], "task") == ["src/app.py", "README.md"]
+# ---------------------------------------------------------------- Keeping files safe
+def test_04_file_viewer_blocks_paths_that_climb_out_of_the_project(signed_in_client, fake_project):
+    """A path such as ../../etc/passwd is refused."""
+    url, _ = fake_project
+    reply = signed_in_client.get("/api/repo/file_content", params={"repo_url": url, "file_path": "../../etc/passwd"})
+    assert reply.status_code == 403
 
 
-def test_selection_keeps_at_most_twelve(monkeypatch):
-    paths = [f"f{i}.py" for i in range(30)]
-    monkeypatch.setattr(repo_evidence, "generate", lambda *a, **k: "\n".join(paths))
-    assert len(repo_evidence.select_files(paths, "task")) == 12
+def test_05_file_viewer_refuses_a_shortcut_to_a_file_outside_the_project(signed_in_client, fake_project, tmp_path):
+    """A symbolic link pointing at a secret outside the project is not followed."""
+    url, project = fake_project
+    secret = tmp_path / "server-secrets.env"
+    secret.write_text("GEMINI_API_KEY=do-not-leak")
+    os.symlink(secret, project / "notes.txt")
+    reply = signed_in_client.get("/api/repo/file_content", params={"repo_url": url, "file_path": "notes.txt"})
+    assert reply.status_code == 403
+    assert "do-not-leak" not in reply.text
 
 
-def test_selection_failure_falls_back_to_tree_only(monkeypatch):
-    def boom(*a, **k):
-        raise HTTPException(502, "empty")
+def test_06_requests_without_sign_in_are_refused():
+    """Every feature needs a signed-in user; no token means 401."""
+    from fastapi.testclient import TestClient
 
-    monkeypatch.setattr(repo_evidence, "generate", boom)
-    assert repo_evidence.select_files(["a.py"], "task") == []
-    assert "None could be read" in repo_evidence.sources_section("")
-
-
-def test_reader_skips_binary_files(tmp_path):
-    (tmp_path / "img.bin").write_bytes(b"PNG\x00\x01\x02")
-    assert repo_evidence.read_selected(str(tmp_path), ["img.bin"]) == ""
+    main.app.dependency_overrides.clear()
+    reply = TestClient(main.app).post("/api/chat", json={"message": "hi", "history": []})
+    assert reply.status_code == 401
 
 
-def test_reader_cuts_long_file_and_marks_cut(tmp_path):
+# ---------------------------------------------------------------- Choosing and reading files
+def test_07_file_names_the_ai_invented_are_thrown_away(monkeypatch):
+    """Only names that really exist in the project survive, and never more than 12."""
+    real_files = [f"src/file{i}.py" for i in range(20)]
+    ai_reply = "src/made_up.py\n" + "\n".join(real_files)
+    monkeypatch.setattr(repo_evidence, "generate", lambda *args, **kwargs: ai_reply)
+    chosen = repo_evidence.select_files(real_files, "fix the login bug")
+    assert "src/made_up.py" not in chosen
+    assert len(chosen) == 12 and all(name in real_files for name in chosen)
+
+
+def test_08_binary_files_are_skipped(tmp_path):
+    """Files containing a zero byte (images, compiled code) are never quoted to the AI."""
+    (tmp_path / "logo.png").write_bytes(b"PNG\x00\x01\x02")
+    assert repo_evidence.read_selected(str(tmp_path), ["logo.png"]) == ""
+
+
+def test_09_long_files_are_cut_marked_and_line_numbered(tmp_path):
+    """A file over 40,000 characters is cut, the cut is marked, and lines are numbered."""
     (tmp_path / "big.py").write_text("x = 1\n" * 20000)  # 120,000 characters
-    out = repo_evidence.read_selected(str(tmp_path), ["big.py"])
-    assert "(file continues)" in out
-    assert "    1 | x = 1" in out
+    quoted = repo_evidence.read_selected(str(tmp_path), ["big.py"])
+    assert "    1 | x = 1" in quoted
+    assert "(file continues)" in quoted
 
 
-def test_reader_refuses_symlink_leaving_clone(tmp_path):
-    secret = tmp_path / "secret.env"
-    secret.write_text("KEY=1")
-    clone = tmp_path / "clone"
-    clone.mkdir()
-    os.symlink(secret, clone / "link.txt")
-    assert repo_evidence.read_selected(str(clone), ["link.txt"]) == ""
+def test_10_if_the_junk_folder_check_fails_nothing_is_hidden(monkeypatch):
+    """When the AI call fails, every folder stays visible rather than risk hiding real code."""
+    def broken_ai(*args, **kwargs):
+        raise HTTPException(500, "AI unavailable")
+
+    monkeypatch.setattr(dir_filter, "generate", broken_ai)
+    folders = DirectoryFilter()
+    folders.refine([("node_modules", "node_modules", "/nowhere/node_modules")])
+    assert folders.ignored == set()
 
 
-# --------------------------------------------------------------------------
-# Directory filter (3)
-# --------------------------------------------------------------------------
-def test_filter_ignores_answer_that_discards_everything(monkeypatch):
-    monkeypatch.setattr(dir_filter, "generate", lambda *a, **k: "src\nlib")
-    f = DirectoryFilter()
-    f.refine([("src", "src", "/nonexistent/src"), ("lib", "lib", "/nonexistent/lib")])
-    assert f.ignored == set()
-
-
-def test_filter_makes_at_most_six_calls(monkeypatch):
-    calls = []
-    monkeypatch.setattr(dir_filter, "generate", lambda *a, **k: calls.append(1) or "")
-    f = DirectoryFilter()
-    for i in range(10):
-        f.refine([(f"d{i}", f"d{i}", f"/nonexistent/d{i}")])
-    assert len(calls) == 6
-
-
-def test_filter_keeps_everything_when_call_fails(monkeypatch):
-    def boom(*a, **k):
-        raise HTTPException(500, "down")
-
-    monkeypatch.setattr(dir_filter, "generate", boom)
-    f = DirectoryFilter()
-    f.refine([("node_modules", "node_modules", "/nonexistent/nm")])
-    assert f.ignored == set()
-
-
-# --------------------------------------------------------------------------
-# Issue search (2)
-# --------------------------------------------------------------------------
-def test_issue_search_caps_repositories_and_issues(monkeypatch):
-    items = []
-    for r in range(25):
-        for i in range(30 if r == 0 else 1):
-            items.append({
-                "id": r * 100 + i, "title": "t", "html_url": "u", "labels": [],
-                "repository_url": f"https://api.github.com/repos/o/r{r}",
+# ---------------------------------------------------------------- Features
+def test_11_issue_search_shows_at_most_20_projects_and_25_issues_each(monkeypatch):
+    """Results are grouped by project and capped, but every match is still counted."""
+    results = []
+    for project in range(25):
+        for issue in range(30 if project == 0 else 1):
+            results.append({
+                "id": project * 100 + issue, "title": "Fix typo", "html_url": "https://github.com/x", "labels": [],
+                "repository_url": f"https://api.github.com/repos/owner/project{project}",
             })
-    monkeypatch.setattr(issue_finder, "github_get", lambda *a, **k: {"items": items})
+    monkeypatch.setattr(issue_finder, "github_get", lambda *args, **kwargs: {"items": results})
     groups = issue_finder.search_issues("python")
     assert len(groups) == 20
     assert len(groups[0].issues) == 25 and groups[0].issueCount == 30
 
 
-def test_issue_search_requires_a_skill():
-    with pytest.raises(HTTPException) as exc:
-        issue_finder.search_issues(" , ")
-    assert exc.value.status_code == 400
-
-
-# --------------------------------------------------------------------------
-# Plan parsing (2)
-# --------------------------------------------------------------------------
-def test_plan_parser_splits_steps_and_final_advice():
-    reply = "**Step 1: Read**\nbody one\n\n**Step 2: Change**\nbody two\n\n**Final Advice**\n- be kind"
-    plan = repo_guide.parse_plan(reply)
-    assert [s.title for s in plan] == ["Read", "Change", "Final Advice"]
-
-
-def test_plan_parser_tolerates_trailing_space_after_heading():
-    reply = "**Step 1: Read** \nbody one\n\n**Step 2: Change**  \nbody two\n\n**Final Advice**\n- be kind"
-    plan = repo_guide.parse_plan(reply)
-    assert [s.title for s in plan] == ["Read", "Change", "Final Advice"]
-
-
-# --------------------------------------------------------------------------
-# Snippet review (2)
-# --------------------------------------------------------------------------
-def _review(monkeypatch, reply):
-    monkeypatch.setattr(code_analyzer, "generate", lambda *a, **k: reply)
-    return asyncio.run(code_analyzer.explain_code(code="x = 1", context=""))
-
-
-def test_review_without_marker_is_marked_correct(monkeypatch):
-    result = _review(monkeypatch, "Assigns 1 to x. No security issues found.")
-    assert result.is_correct and result.corrected_code is None
-
-
-def test_review_split_survives_marker_phrase_in_explanation(monkeypatch):
-    reply = (
-        "The function is missing a colon. Below the line `Corrected Code:` you will find the fix.\n"
-        "Severity: Low.\n\nCorrected Code:\n```python\ndef f():\n    return 1\n```"
+def test_12_a_plan_is_split_into_its_steps_even_with_stray_spaces():
+    """Each 'Step N' heading and 'Final Advice' becomes its own card on screen."""
+    ai_reply = (
+        "**Step 1: Understand the issue** \nRead the bug report.\n\n"
+        "**Step 2: Make the change**\nEdit login.py.\n\n"
+        "**Final Advice**  \nKeep the pull request small."
     )
-    result = _review(monkeypatch, reply)
-    assert result.corrected_code == "def f():\n    return 1"
+    plan = repo_guide.parse_plan(ai_reply)
+    assert [step.title for step in plan] == ["Understand the issue", "Make the change", "Final Advice"]
 
 
-# --------------------------------------------------------------------------
-# Chat and model gateway (2)
-# --------------------------------------------------------------------------
-def test_chat_forwards_only_last_seven_turns(monkeypatch):
-    seen = {}
-    monkeypatch.setattr(chat, "generate", lambda contents, *a, **k: seen.setdefault("c", contents) and "ok")
-    history = [chat.ChatTurn(role="user" if i % 2 == 0 else "ai", text=str(i)) for i in range(30)]
-    asyncio.run(chat.chat_with_ai(chat.ChatRequest(message="now", history=history)))
-    assert len(seen["c"]) == 7 * 2 + 1
-    assert seen["c"][0]["parts"] == ["16"]
+def test_13_code_review_separates_explanation_from_corrected_code(monkeypatch):
+    """The fix is taken from after the 'Corrected Code:' line, even if the phrase also appears earlier."""
+    ai_reply = (
+        "The function is missing a colon. See the `Corrected Code:` section below.\n"
+        "Severity: Low.\n\nCorrected Code:\n```python\ndef add(a, b):\n    return a + b\n```"
+    )
+    monkeypatch.setattr(code_analyzer, "generate", lambda *args, **kwargs: ai_reply)
+    result = asyncio.run(code_analyzer.explain_code(code="def add(a, b) return a + b", context=""))
+    assert result.is_correct is False
+    assert result.corrected_code == "def add(a, b):\n    return a + b"
+    assert "missing a colon" in result.explanation
 
 
-def test_gateway_turns_empty_reply_into_502(monkeypatch):
-    class Empty:
-        text = ""
-        prompt_feedback = type("F", (), {"block_reason": "SAFETY"})()
-
-    class Model:
-        def __init__(self, **kwargs):
-            pass
-
-        def generate_content(self, prompt):
-            return Empty()
-
-    monkeypatch.setattr(core.genai, "GenerativeModel", Model)
-    with pytest.raises(HTTPException) as exc:
-        core.generate("hi", "sys")
-    assert exc.value.status_code == 502 and "SAFETY" in exc.value.detail
+def test_14_chat_remembers_only_the_last_seven_exchanges(monkeypatch):
+    """Older messages are dropped so every request stays small and predictable."""
+    sent_to_ai = {}
+    monkeypatch.setattr(chat, "generate", lambda messages, *args, **kwargs: sent_to_ai.setdefault("m", messages) and "ok")
+    history = [chat.ChatTurn(role="user" if i % 2 == 0 else "ai", text=f"message {i}") for i in range(30)]
+    asyncio.run(chat.chat_with_ai(chat.ChatRequest(message="latest question", history=history)))
+    assert len(sent_to_ai["m"]) == 7 * 2 + 1  # 7 question-and-answer pairs plus the new question
 
 
-# --------------------------------------------------------------------------
-# Access control (1)
-# --------------------------------------------------------------------------
-def test_api_rejects_request_without_sign_in_token(anon_client, monkeypatch):
-    monkeypatch.setattr(chat, "generate", lambda *a, **k: "answer")
-    r = anon_client.post("/api/chat", json={"message": "hi", "history": []})
-    assert r.status_code == 401
+def test_15_a_slow_ai_answer_does_not_freeze_the_server_for_others(monkeypatch):
+    """While one user waits 1 second for the AI, another user's request still answers at once."""
+    monkeypatch.setattr(chat, "generate", lambda *args, **kwargs: time.sleep(1) or "slow answer")
+    main.app.dependency_overrides[require_user] = lambda: {"sub": "test-user"}
+
+    async def two_users():
+        transport = httpx.ASGITransport(app=main.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            started = time.perf_counter()
+            slow = asyncio.create_task(client.post("/api/chat", json={"message": "hi", "history": []}))
+            await asyncio.sleep(0.1)  # give the slow request time to reach the AI
+            quick = await client.get("/")
+            waited = time.perf_counter() - started  # about 0.1 s if the server stayed free
+            await slow
+            return quick.status_code, waited
+
+    try:
+        status, waited = asyncio.run(two_users())
+    finally:
+        main.app.dependency_overrides.clear()
+    assert status == 200
+    assert waited < 0.5

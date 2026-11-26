@@ -30,7 +30,8 @@ CORS_ORIGINS = [
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Clean up cloned repo temp directories when the server shuts down."""
+    """Remove clones left by an earlier process on start-up, and this process's on shutdown."""
+    repo_index.reset_clone_root()
     yield
     repo_index.clear_cache()
 

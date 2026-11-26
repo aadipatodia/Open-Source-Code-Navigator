@@ -4,6 +4,7 @@ The client replays history on every request, so the server holds no session
 state. CHAT_HISTORY_TURNS caps how many turns we forward to Gemini.
 """
 
+import asyncio
 import os
 from typing import List, Literal
 
@@ -70,4 +71,5 @@ async def chat_with_ai(request: ChatRequest):
         for turn in request.history[-(CHAT_HISTORY_TURNS * 2) :]
     ]
     contents.append({"role": "user", "parts": [request.message.strip()]})
-    return {"response": generate(contents, CHAT_SYSTEM_INSTRUCTION)}
+    # The model call is slow blocking I/O, so run it in a thread and keep the server responsive.
+    return {"response": await asyncio.to_thread(generate, contents, CHAT_SYSTEM_INSTRUCTION)}
