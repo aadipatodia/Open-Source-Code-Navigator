@@ -1,6 +1,8 @@
 // Axios client and error helper for talking to the FastAPI backend.
 import axios, { AxiosError } from 'axios';
 
+import { auth } from './firebase';
+
 /** Backend API base URL. Set REACT_APP_API_BASE on Vercel (e.g. https://your-app.onrender.com). */
 export const API_BASE =
   process.env.REACT_APP_API_BASE?.replace(/\/$/, '') || 'http://localhost:8000';
@@ -9,6 +11,17 @@ export const API_BASE =
 export const apiClient = axios.create({
   baseURL: API_BASE,
   timeout: 120_000,
+});
+
+// Every API route requires sign-in, so send the user's Firebase ID token with each request.
+// getIdToken() returns a cached token and refreshes it automatically before it expires.
+apiClient.interceptors.request.use(async (config) => {
+  const user = auth.currentUser;
+  if (user) {
+    const token = await user.getIdToken();
+    config.headers.set('Authorization', `Bearer ${token}`);
+  }
+  return config;
 });
 
 /** Extract a human-readable message from an axios error, or return the fallback. */

@@ -26,7 +26,21 @@ def fake_repo(tmp_path):
 
 @pytest.fixture
 def client():
+    """A client whose requests count as signed in, for testing the routes themselves."""
+    from fastapi.testclient import TestClient
+    import main
+    from auth import require_user
+
+    main.app.dependency_overrides[require_user] = lambda: {"sub": "test-user"}
+    yield TestClient(main.app)
+    main.app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def anon_client():
+    """A client that sends no sign-in token at all."""
     from fastapi.testclient import TestClient
     import main
 
+    main.app.dependency_overrides.clear()
     return TestClient(main.app)

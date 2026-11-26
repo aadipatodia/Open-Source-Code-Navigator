@@ -8,7 +8,7 @@ import os
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 import chat
@@ -16,6 +16,7 @@ import code_analyzer
 import issue_finder
 import repo_guide
 import repo_index
+from auth import require_user
 
 CORS_ORIGINS = [
     "http://localhost:3000",
@@ -44,11 +45,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(repo_index.router)
-app.include_router(repo_guide.router)
-app.include_router(issue_finder.router)
-app.include_router(code_analyzer.router)
-app.include_router(chat.router)
+# Every API route needs a signed-in user; only the health check below stays open.
+signed_in = [Depends(require_user)]
+app.include_router(repo_index.router, dependencies=signed_in)
+app.include_router(repo_guide.router, dependencies=signed_in)
+app.include_router(issue_finder.router, dependencies=signed_in)
+app.include_router(code_analyzer.router, dependencies=signed_in)
+app.include_router(chat.router, dependencies=signed_in)
 
 
 @app.get("/")

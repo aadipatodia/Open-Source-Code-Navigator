@@ -271,7 +271,7 @@ def test_gateway_turns_empty_reply_into_502(monkeypatch):
 # --------------------------------------------------------------------------
 # Access control (1)
 # --------------------------------------------------------------------------
-def test_api_rejects_request_without_sign_in_token(client, monkeypatch):
+def test_api_rejects_request_without_sign_in_token(anon_client, monkeypatch):
     monkeypatch.setattr(chat, "generate", lambda *a, **k: "answer")
-    r = client.post("/api/chat", json={"message": "hi", "history": []})
+    r = anon_client.post("/api/chat", json={"message": "hi", "history": []})
     assert r.status_code == 401
